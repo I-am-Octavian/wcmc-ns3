@@ -20,7 +20,7 @@ CourseChange(std::ostream* os, std::string foo, Ptr<const MobilityModel> mobilit
     Vector vel = mobility->GetVelocity(); // Get velocity
     Vector pos = mobility->GetPosition();
     // Prints position and velocities
-    *os << vel.x << " " << vel.y << std::endl;
+    *os << vel.x << " " << vel.y <<  " " << pos.x << " " << pos.y << std::endl;
 }
 
 /**
@@ -174,6 +174,7 @@ class BiRandomVariable: public RandomVariableStream {
 int
 main(int argc, char* argv[])
 {
+    Config::SetDefault("ns3::RrFfMacScheduler::HarqEnabled", BooleanValue(false));
     // LogLevel logLevel = (LogLevel)(LOG_PREFIX_FUNC | LOG_PREFIX_TIME | LOG_LEVEL_ALL);
 
     // LogComponentEnable ("LteHelper", logLevel);
@@ -446,9 +447,9 @@ main(int argc, char* argv[])
     lteHelper->EnableRlcTraces();
     lteHelper->EnablePdcpTraces();
     Ptr<RadioBearerStatsCalculator> rlcStats = lteHelper->GetRlcStats();
-    rlcStats->SetAttribute("EpochDuration", TimeValue(Seconds(0.05)));
+    rlcStats->SetAttribute("EpochDuration", TimeValue(Seconds(3.05)));
     Ptr<RadioBearerStatsCalculator> pdcpStats = lteHelper->GetPdcpStats();
-    pdcpStats->SetAttribute("EpochDuration", TimeValue(Seconds(0.05)));
+    pdcpStats->SetAttribute("EpochDuration", TimeValue(Seconds(3.05)));
 
     // connect custom trace sinks for RRC connection establishment and handover notification
 
@@ -457,28 +458,28 @@ main(int argc, char* argv[])
     velocityOs.open("velocity");
     Config::Connect("/NodeList/*/$ns3::MobilityModel/CourseChange",
             MakeBoundCallback(&CourseChange, &velocityOs));
-    // Config::Connect("/NodeList/*/DeviceList/*/LteEnbRrc/ConnectionEstablished",
-    //                 MakeCallback(&NotifyConnectionEstablishedEnb));
-    // Config::Connect("/NodeList/*/DeviceList/*/LteUeRrc/ConnectionEstablished",
-    //                 MakeCallback(&NotifyConnectionEstablishedUe));
-    // Config::Connect("/NodeList/*/DeviceList/*/LteEnbRrc/HandoverStart",
-    //                 MakeCallback(&NotifyHandoverStartEnb));
-    // Config::Connect("/NodeList/*/DeviceList/*/LteUeRrc/HandoverStart",
-    //                 MakeCallback(&NotifyHandoverStartUe));
-    // Config::Connect("/NodeList/*/DeviceList/*/LteEnbRrc/HandoverEndOk",
-    //                 MakeCallback(&NotifyHandoverEndOkEnb));
-    // Config::Connect("/NodeList/*/DeviceList/*/LteUeRrc/HandoverEndOk",
-    //                 MakeCallback(&NotifyHandoverEndOkUe));
-    //
-    // // Hook a trace sink (the same one) to the four handover failure traces
-    // Config::Connect("/NodeList/*/DeviceList/*/LteEnbRrc/HandoverFailureNoPreamble",
-    //                 MakeCallback(&NotifyHandoverFailure));
-    // Config::Connect("/NodeList/*/DeviceList/*/LteEnbRrc/HandoverFailureMaxRach",
-    //                 MakeCallback(&NotifyHandoverFailure));
-    // Config::Connect("/NodeList/*/DeviceList/*/LteEnbRrc/HandoverFailureLeaving",
-    //                 MakeCallback(&NotifyHandoverFailure));
-    // Config::Connect("/NodeList/*/DeviceList/*/LteEnbRrc/HandoverFailureJoining",
-    //                 MakeCallback(&NotifyHandoverFailure));
+    Config::Connect("/NodeList/*/DeviceList/*/LteEnbRrc/ConnectionEstablished",
+                    MakeCallback(&NotifyConnectionEstablishedEnb));
+    Config::Connect("/NodeList/*/DeviceList/*/LteUeRrc/ConnectionEstablished",
+                    MakeCallback(&NotifyConnectionEstablishedUe));
+    Config::Connect("/NodeList/*/DeviceList/*/LteEnbRrc/HandoverStart",
+                    MakeCallback(&NotifyHandoverStartEnb));
+    Config::Connect("/NodeList/*/DeviceList/*/LteUeRrc/HandoverStart",
+                    MakeCallback(&NotifyHandoverStartUe));
+    Config::Connect("/NodeList/*/DeviceList/*/LteEnbRrc/HandoverEndOk",
+                    MakeCallback(&NotifyHandoverEndOkEnb));
+    Config::Connect("/NodeList/*/DeviceList/*/LteUeRrc/HandoverEndOk",
+                    MakeCallback(&NotifyHandoverEndOkUe));
+
+    // Hook a trace sink (the same one) to the four handover failure traces
+    Config::Connect("/NodeList/*/DeviceList/*/LteEnbRrc/HandoverFailureNoPreamble",
+                    MakeCallback(&NotifyHandoverFailure));
+    Config::Connect("/NodeList/*/DeviceList/*/LteEnbRrc/HandoverFailureMaxRach",
+                    MakeCallback(&NotifyHandoverFailure));
+    Config::Connect("/NodeList/*/DeviceList/*/LteEnbRrc/HandoverFailureLeaving",
+                    MakeCallback(&NotifyHandoverFailure));
+    Config::Connect("/NodeList/*/DeviceList/*/LteEnbRrc/HandoverFailureJoining",
+                    MakeCallback(&NotifyHandoverFailure));
 
     Simulator::Stop(simTime);
     Simulator::Run();
