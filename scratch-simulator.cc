@@ -174,7 +174,48 @@ class BiRandomVariable: public RandomVariableStream {
 int
 main(int argc, char* argv[])
 {
-    Config::SetDefault("ns3::RrFfMacScheduler::HarqEnabled", BooleanValue(false));
+    // Command line arguments
+    std::string schedular = "";
+	float speed = 0.f;
+	unsigned int rngRun = 1;
+	bool fullBufferFlag = false;
+
+    RngSeedManager::SetSeed(12);
+    RngSeedManager::SetRun(5);
+    CommandLine cmd(__FILE__);
+    // cmd.AddValue("numberOfUes", "Number of UEs", numberOfUes);
+    // cmd.AddValue("numberOfEnbs", "Number of eNodeBs", numberOfEnbs);
+    // cmd.AddValue("simTime", "Total duration of the simulation", simTime);
+    // cmd.AddValue("disableDl", "Disable downlink data flows", disableDl);
+    // cmd.AddValue("disableUl", "Disable uplink data flows", disableUl);
+    cmd.AddValue("schedular", "Type of schedular to use, PF, RR, LT, PSS", schedular);
+	cmd.AddValue("speed", "Speed of the UE under simulator", speed);
+	cmd.AddValue("rngRun", "Seed for the random simulation", rngRun);
+	cmd.AddValue("fullBufferFlag", "Flag to enable or disable full Buffer",
+				 fullBufferFlag);
+    cmd.Parse(argc, argv);
+
+    // schedular setup
+    if (schedular == "PF") {
+        Config::SetDefault("ns3::PfFfMacScheduler::HarqEnabled", BooleanValue(false));
+    } else if (schedular == "RR") {
+        Config::SetDefault("ns3::RrFfMacScheduler::HarqEnabled", BooleanValue(false));
+    } else if (schedular == "LT") {
+        Config::SetDefault("ns3::LtFfMacScheduler::HarqEnabled", BooleanValue(false));
+    } else if (schedular == "PSS") {
+        Config::SetDefault("ns3::LtFfMacScheduler::HarqEnabled", BooleanValue(false));
+    }
+
+    // seed values
+    RngSeedManager::SetSeed(rngRun);
+
+    // full buffer
+    if (fullBufferFlag) {
+        Config::SetDefault("ns3::DropTailQueue<Packet>::MaxSize", StringValue("100p")); // limiting the queue size to hold only 100 packets
+    } else if (!fullBufferFlag) {
+        Config::SetDefault("ns3::DropTailQueue<Packet>::MaxSize", StringValue("1000p"));
+    }
+
     // LogLevel logLevel = (LogLevel)(LOG_PREFIX_FUNC | LOG_PREFIX_TIME | LOG_LEVEL_ALL);
 
     // LogComponentEnable ("LteHelper", logLevel);
@@ -195,7 +236,7 @@ main(int argc, char* argv[])
     uint16_t numberOfUes = 10;
     uint16_t numberOfEnbs = 4;
     uint16_t numBearersPerUe = 2;
-    Time simTime = Seconds(5);
+    Time simTime = Seconds(0.6);
     // double distance = 100.0;
     bool disableDl = false;
     bool disableUl = false;
@@ -240,6 +281,7 @@ main(int argc, char* argv[])
 
     // Create the Internet
     PointToPointHelper p2ph;
+    p2ph.SetQueue("ns3::DropTailQueue");
     p2ph.SetDeviceAttribute("DataRate", DataRateValue(DataRate("100Gb/s")));
     p2ph.SetDeviceAttribute("Mtu", UintegerValue(1500));
     p2ph.SetChannelAttribute("Delay", TimeValue(Seconds(0.010)));
