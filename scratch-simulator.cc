@@ -1,10 +1,14 @@
 #include "ns3/applications-module.h"
+#include "ns3/applications-module.h"
 #include "ns3/core-module.h"
 #include "ns3/internet-module.h"
 #include "ns3/lte-module.h"
+#include "ns3/flow-monitor-module.h"
 #include "ns3/mobility-module.h"
 #include "ns3/network-module.h"
 #include "ns3/point-to-point-module.h"
+
+#include <bits/stdc++.h>
 // #include "ns3/gtk-config-store.h"
 
 using namespace ns3;
@@ -12,6 +16,70 @@ using std::vector;
 
 NS_LOG_COMPONENT_DEFINE("ASSIGNMENT");
 
+uint32_t totalZeroSpeed = 0;
+uint32_t totalTenSpeed = 0;
+vector<uint32_t> throughputArray0;
+vector<uint32_t> throughputArray1;
+uint16_t numberOfUes = 10;
+uint16_t numberOfEnbs = 4;
+FlowMonitorHelper flowHelper;
+
+
+static void
+CalculateThroughput(Ptr<FlowMonitor> monitor, vector<uint32_t>& array) {
+    // FlowMonitorHelper flowmon;
+    // Ptr<Ipv4FlowClassifier> classifier = DynamicCast<Ipv4FlowClassifier> (flowmon.GetClassifier ());
+    std::map<FlowId, FlowMonitor::FlowStats> stats = monitor->GetFlowStats ();
+    for (auto i = stats.begin (); i != stats.end (); ++i)
+    {
+          // Ipv4FlowClassifier::FiveTuple t = classifier->FindFlow (i->first);
+          std::cout << "Flow at " << Simulator::Now().GetSeconds()  << " " <<  i->first - 1 << "\n";
+         std::cout << "  Tx Bytes:   " << i->second.txBytes << "\n";
+         std::cout << "  Rx Bytes:   " << i->second.rxBytes << "\n";
+          std::cout << " Throughput: " << i->second.txBytes * 8.0 / 10.0 / 1024 / 1024  << " Mbps\n";
+
+          // in
+          array.push_back(i->second.rxBytes);
+    }
+
+    Simulator::Schedule(Seconds(1.0), &CalculateThroughput, monitor, array);
+}
+
+
+static void
+CalculateCumulativeThroughput() {
+    std::ofstream os0;
+    os0.open("graph/graph3speed0.txt", std::ios::app);
+
+    std::ofstream os1;
+    os1.open("graph/graph3speed1.txt", std::ios::app);
+    uint32_t prev0;
+    if (!throughputArray0.empty()) {
+        sort(throughputArray0.begin(), throughputArray0.end());
+        prev0 = throughputArray0[0];
+    }
+
+    uint32_t prev1;
+    if (!throughputArray1.empty()) {
+        sort(throughputArray1.begin(), throughputArray1.end());
+        prev1 = throughputArray1[0];
+    }
+
+
+    for (int i = 1; i < throughputArray0.size(); i++) {
+        if (throughputArray0[i] != prev0) {
+            os0 << throughputArray0[i] << " " << i << std::endl;
+            prev0 = throughputArray0[i];
+        }
+    }
+
+    for (int i = 1; i < throughputArray1.size(); i++) {
+        if (throughputArray1[i] != prev1) {
+            os1 << throughputArray1[i] << " " << i << std::endl;
+            prev1 = throughputArray1[i];
+        }
+    }
+}
 
 // to write the velocity from callback
 static void
@@ -22,6 +90,14 @@ CourseChange(std::ostream* os, std::string foo, Ptr<const MobilityModel> mobilit
     // Prints position and velocities
     *os << vel.x << " " << vel.y <<  " " << pos.x << " " << pos.y << std::endl;
 }
+
+static void
+BytesTransferredCallback(std::string foo, Ptr<const Packet> packet) {
+    static uint32_t totalBytesTransferred = 0;
+    totalBytesTransferred += packet->GetSize();
+    std::cout << "Bytes transferred: " << totalBytesTransferred << std::endl;
+}
+
 
 /**
  * UE Connection established notification.
@@ -175,46 +251,41 @@ int
 main(int argc, char* argv[])
 {
     // Command line arguments
-    std::string schedular = "";
+    std::string scheduler = "RR";
 	float speed = 0.f;
 	unsigned int rngRun = 1;
 	bool fullBufferFlag = false;
 
-    RngSeedManager::SetSeed(12);
+    RngSeedManager::SetSeed(1);
     RngSeedManager::SetRun(5);
     CommandLine cmd(__FILE__);
-    // cmd.AddValue("numberOfUes", "Number of UEs", numberOfUes);
-    // cmd.AddValue("numberOfEnbs", "Number of eNodeBs", numberOfEnbs);
-    // cmd.AddValue("simTime", "Total duration of the simulation", simTime);
-    // cmd.AddValue("disableDl", "Disable downlink data flows", disableDl);
-    // cmd.AddValue("disableUl", "Disable uplink data flows", disableUl);
-    cmd.AddValue("schedular", "Type of schedular to use, PF, RR, LT, PSS", schedular);
+    cmd.AddValue("scheduler", "Type of schedular to use, PF, RR, MT, PSS", scheduler);
 	cmd.AddValue("speed", "Speed of the UE under simulator", speed);
 	cmd.AddValue("rngRun", "Seed for the random simulation", rngRun);
 	cmd.AddValue("fullBufferFlag", "Flag to enable or disable full Buffer",
 				 fullBufferFlag);
     cmd.Parse(argc, argv);
 
-    // schedular setup
-    if (schedular == "PF") {
-        Config::SetDefault("ns3::PfFfMacScheduler::HarqEnabled", BooleanValue(false));
-    } else if (schedular == "RR") {
-        Config::SetDefault("ns3::RrFfMacScheduler::HarqEnabled", BooleanValue(false));
-    } else if (schedular == "LT") {
-        Config::SetDefault("ns3::LtFfMacScheduler::HarqEnabled", BooleanValue(false));
-    } else if (schedular == "PSS") {
-        Config::SetDefault("ns3::LtFfMacScheduler::HarqEnabled", BooleanValue(false));
-    }
-
     // seed values
     RngSeedManager::SetSeed(rngRun);
 
-    // full buffer
-    if (fullBufferFlag) {
-        Config::SetDefault("ns3::DropTailQueue<Packet>::MaxSize", StringValue("100p")); // limiting the queue size to hold only 100 packets
-    } else if (!fullBufferFlag) {
-        Config::SetDefault("ns3::DropTailQueue<Packet>::MaxSize", StringValue("1000p"));
-    }
+    // full bufferueNumPergNb
+     double lambda = 1000;
+     double bandwidth = 100e6;
+     uint32_t udpPacketSize = 1000;
+
+
+     if (fullBufferFlag)
+     {
+         double bitRate = 75000000; // 75 Mbps will saturate the NR system of 20 MHz with the
+                                    // NrEesmIrT1 error model
+         bitRate /= 160;    // Divide the cell capacity among UEs
+         if (bandwidth > 20e6)
+         {
+             bitRate *= bandwidth / 20e6;
+         }
+         lambda = bitRate / static_cast<double>(udpPacketSize * 8);
+     }
 
     // LogLevel logLevel = (LogLevel)(LOG_PREFIX_FUNC | LOG_PREFIX_TIME | LOG_LEVEL_ALL);
 
@@ -233,16 +304,13 @@ main(int argc, char* argv[])
     LogComponentEnable("UdpClient", LOG_LEVEL_ALL);
     LogComponentEnable("UdpServer", LOG_LEVEL_ALL);
 
-    uint16_t numberOfUes = 10;
-    uint16_t numberOfEnbs = 4;
-    uint16_t numBearersPerUe = 2;
-    Time simTime = Seconds(0.6);
-    // double distance = 100.0;
+    uint16_t numBearersPerUe = 1;
+    Time simTime = Seconds(10.0);
     bool disableDl = false;
     bool disableUl = false;
 
-    uint32_t ulResourceBlocks = 100;
-    uint32_t dlResourceBlocks = 100;
+    uint32_t ulResourceBlocks = 50;
+    uint32_t dlResourceBlocks = 50;
 
     // change some default attributes so that they are reasonable for
     // this scenario, but do this before processing command line
@@ -255,19 +323,20 @@ main(int argc, char* argv[])
     Config::SetDefault ("ns3::LteEnbNetDevice::DlBandwidth", UintegerValue (dlResourceBlocks));
     Config::SetDefault ("ns3::LteEnbNetDevice::UlBandwidth", UintegerValue (ulResourceBlocks));
 
-    // Command line arguments
-    // CommandLine cmd(__FILE__);
-    // cmd.AddValue("numberOfUes", "Number of UEs", numberOfUes);
-    // cmd.AddValue("numberOfEnbs", "Number of eNodeBs", numberOfEnbs);
-    // cmd.AddValue("simTime", "Total duration of the simulation", simTime);
-    // cmd.AddValue("disableDl", "Disable downlink data flows", disableDl);
-    // cmd.AddValue("disableUl", "Disable uplink data flows", disableUl);
-    // cmd.Parse(argc, argv);
-
     Ptr<LteHelper> lteHelper = CreateObject<LteHelper>();
+
     Ptr<PointToPointEpcHelper> epcHelper = CreateObject<PointToPointEpcHelper>();
     lteHelper->SetEpcHelper(epcHelper);
-    lteHelper->SetSchedulerType("ns3::RrFfMacScheduler");
+
+    if (scheduler == "PF") {
+        lteHelper->SetSchedulerType("ns3::PfFfMacScheduler");
+    } else if (scheduler == "RR") {
+        lteHelper->SetSchedulerType("ns3::RrFfMacScheduler");
+    } else if (scheduler == "MT") {
+        lteHelper->SetSchedulerType("ns3::TdMtFfMacScheduler");
+    } else if (scheduler == "PSS") {
+        lteHelper->SetSchedulerType("ns3::PssFfMacScheduler");
+    }
     lteHelper->SetHandoverAlgorithmType("ns3::NoOpHandoverAlgorithm"); // disable automatic handover
 
     Ptr<Node> pgw = epcHelper->GetPgwNode();
@@ -281,7 +350,8 @@ main(int argc, char* argv[])
 
     // Create the Internet
     PointToPointHelper p2ph;
-    p2ph.SetQueue("ns3::DropTailQueue");
+    p2ph.SetQueue("ns3::DropTailQueue",
+               "MaxSize", StringValue("1p"));
     p2ph.SetDeviceAttribute("DataRate", DataRateValue(DataRate("100Gb/s")));
     p2ph.SetDeviceAttribute("Mtu", UintegerValue(1500));
     p2ph.SetChannelAttribute("Delay", TimeValue(Seconds(0.010)));
@@ -298,7 +368,6 @@ main(int argc, char* argv[])
     // interface 0 is localhost, 1 is the p2p device
     remoteHostStaticRouting->AddNetworkRouteTo(Ipv4Address("7.0.0.0"), Ipv4Mask("255.0.0.0"), 1);
 
-    // FIXED
     NodeContainer ueNodes[numberOfUes];
     NodeContainer enbNodes;
     enbNodes.Create(numberOfEnbs);
@@ -310,9 +379,9 @@ main(int argc, char* argv[])
     // Install Mobility Model
     Ptr<ListPositionAllocator> positionAlloc = CreateObject<ListPositionAllocator>();
     positionAlloc->Add(Vector(0.0, 0.0, 0.0));
-    positionAlloc->Add(Vector(5000.0, 0.0, 0.0));
-    positionAlloc->Add(Vector(5000.0, 5000.0, 0.0));
-    positionAlloc->Add(Vector(0.0, 5000.0, 0.0));
+    positionAlloc->Add(Vector(500.0, 0.0, 0.0));
+    positionAlloc->Add(Vector(500.0, 500.0, 0.0));
+    positionAlloc->Add(Vector(0.0, 500.0, 0.0));
 
     // setting the position of ENBs
     MobilityHelper enbMobility;
@@ -336,7 +405,6 @@ main(int argc, char* argv[])
                              "Time", TimeValue (Seconds (1.0))); // The time to travel before changing direction
 
 
-    // FIXED
     uint32_t counter = 0;
     for (int i = 0; i < numberOfEnbs; i++) {
 
@@ -350,8 +418,6 @@ main(int argc, char* argv[])
 
     // Install LTE Devices in eNB and UEs
     NetDeviceContainer enbLteDevs = lteHelper->InstallEnbDevice(enbNodes);
-
-    // FIXED
     NetDeviceContainer ueLteDevs[numberOfEnbs];
 
     for (int i = 0; i < numberOfEnbs; i++) {
@@ -362,7 +428,6 @@ main(int argc, char* argv[])
     // Install the IP stack on the UEs
     Ipv4InterfaceContainer ueIpIfaces[numberOfEnbs];
 
-    // FIXED
     for (int i = 0; i < numberOfEnbs; i++) {
         ueIpIfaces[i] = epcHelper->AssignUeIpv4Address(NetDeviceContainer(ueLteDevs[i]));
     }
@@ -371,21 +436,10 @@ main(int argc, char* argv[])
     for (int i = 0; i < numberOfEnbs; i++) {
         for (uint16_t j = 0; j < numberOfUes; j++)
         {
-            // FIXED
             lteHelper->Attach(ueLteDevs[i].Get(j), enbLteDevs.Get(i));
         }
     }
 
-
-    // Ptr<RadioEnvironmentMapHelper> remHelper = CreateObject<RadioEnvironmentMapHelper>();
-    // remHelper->SetAttribute("Channel", PointerValue(lteHelper->GetDownlinkSpectrumChannel()));
-    // remHelper->SetAttribute("OutputFile", StringValue("rem.out"));
-    // remHelper->SetAttribute("XMin", DoubleValue(-1000.0));
-    // remHelper->SetAttribute("XMax", DoubleValue(6000.0));
-    // remHelper->SetAttribute("YMin", DoubleValue(-1000.0));
-    // remHelper->SetAttribute("YMax", DoubleValue(6000.0));
-    // remHelper->SetAttribute("Z", DoubleValue(0.0));
-    // remHelper->Install();
 
     NS_LOG_LOGIC("setting up applications");
 
@@ -400,6 +454,9 @@ main(int argc, char* argv[])
     startTimeSeconds->SetAttribute("Min", DoubleValue(0.05));
     startTimeSeconds->SetAttribute("Max", DoubleValue(0.06));
     Time interPacketInterval = MilliSeconds(1);
+
+    AsciiTraceHelper asciiTraceHelper;
+    Ptr<OutputStreamWrapper> stream = asciiTraceHelper.CreateFileStream ("trace-file-name.tr");
 
     for (int i = 0; i < numberOfEnbs; i++) {
         for (uint32_t u = 0; u < numberOfUes; ++u)
@@ -422,7 +479,6 @@ main(int argc, char* argv[])
 
                     NS_LOG_LOGIC("installing UDP DL app for UE " << u);
 
-                    // FIXED
                     UdpClientHelper dlClientHelper(ueIpIfaces[i].GetAddress(u), dlPort);
                     clientApps.Add(dlClientHelper.Install(remoteHost));
 
@@ -445,6 +501,8 @@ main(int argc, char* argv[])
 
                     NS_LOG_LOGIC("installing UDP UL app for UE " << u);
                     UdpClientHelper ulClientHelper(remoteHostAddr, ulPort);
+                    ulClientHelper.SetAttribute("Interval", TimeValue(Seconds(1.0 / lambda)));
+
                     clientApps.Add(ulClientHelper.Install(ue));
                     PacketSinkHelper ulPacketSinkHelper(
                         "ns3::UdpSocketFactory",
@@ -459,8 +517,11 @@ main(int argc, char* argv[])
 
                 EpsBearer bearer(EpsBearer::NGBR_VIDEO_TCP_DEFAULT);
 
-                // FIXED
                 lteHelper->ActivateDedicatedEpsBearer(ueLteDevs[i].Get(u), bearer, tft);
+
+                ueLteDevs[i].Get(u)->TraceConnectWithoutContext(
+                        "Tx", MakeCallback(&BytesTransferredCallback));
+
 
                 serverApps.Start(MilliSeconds(500));
                 clientApps.Start(MilliSeconds(500));
@@ -484,22 +545,35 @@ main(int argc, char* argv[])
     // Uncomment to enable PCAP tracing
     // p2ph.EnablePcapAll("lena-x2-handover");
 
-    lteHelper->EnablePhyTraces();
-    lteHelper->EnableMacTraces();
-    lteHelper->EnableRlcTraces();
-    lteHelper->EnablePdcpTraces();
-    Ptr<RadioBearerStatsCalculator> rlcStats = lteHelper->GetRlcStats();
-    rlcStats->SetAttribute("EpochDuration", TimeValue(Seconds(3.05)));
-    Ptr<RadioBearerStatsCalculator> pdcpStats = lteHelper->GetPdcpStats();
-    pdcpStats->SetAttribute("EpochDuration", TimeValue(Seconds(3.05)));
+    // lteHelper->EnablePhyTraces();
+    // lteHelper->EnableMacTraces();
+    // lteHelper->EnableRlcTraces();
+    // lteHelper->EnablePdcpTraces();
+
+    // lteHelper->EnableTraces();
+    // lteHelper->EnableLogComponents();
+    // Ptr<RadioBearerStatsCalculator> rlcStats = lteHelper->GetRlcStats();
+    // rlcStats->SetAttribute("EpochDuration", TimeValue(Seconds(3.05)));
+    // Ptr<RadioBearerStatsCalculator> pdcpStats = lteHelper->GetPdcpStats();
+    // pdcpStats->SetAttribute("EpochDuration", TimeValue(Seconds(3.05)));
+    // p2ph.EnableAsciiAll(stream);
+
 
     // connect custom trace sinks for RRC connection establishment and handover notification
 
 
     std::ofstream velocityOs;
     velocityOs.open("velocity");
+
+    for (int i = 0; i < numberOfEnbs; i++) {
+        for (uint16_t j = 0; j < numberOfUes; j++)
+        {
+        }
+    }
+
     Config::Connect("/NodeList/*/$ns3::MobilityModel/CourseChange",
             MakeBoundCallback(&CourseChange, &velocityOs));
+
     Config::Connect("/NodeList/*/DeviceList/*/LteEnbRrc/ConnectionEstablished",
                     MakeCallback(&NotifyConnectionEstablishedEnb));
     Config::Connect("/NodeList/*/DeviceList/*/LteUeRrc/ConnectionEstablished",
@@ -523,12 +597,46 @@ main(int argc, char* argv[])
     Config::Connect("/NodeList/*/DeviceList/*/LteEnbRrc/HandoverFailureJoining",
                     MakeCallback(&NotifyHandoverFailure));
 
+
+    // Flow monitor
+
+    Ptr<FlowMonitor> flowMon0;
+    Ptr<FlowMonitor> flowMon1;
+    Ptr<FlowMonitor> flowMonitor;
+
+
+    // graph 3
+    Ptr<const MobilityModel> mobility = ueNodes[0].Get(0)->GetObject<MobilityModel>();
+    std::cout << mobility->GetPosition().x << std::endl;
+    flowMonitor = flowHelper.Install(ueNodes[0].Get(0));
+
+
+    for (int i = 0; i < numberOfEnbs; i++) {
+        for (int j = 0; j < numberOfUes;j++) {
+            Ptr<MobilityModel> mobility =
+                ueNodes[i].Get(j)->GetObject<MobilityModel>();
+            std::cout << "Mobility\n\n" << mobility->GetVelocity().x << " " << mobility->GetVelocity().y << std::endl;
+            // if (mobility->GetVelocity().x != 0) {
+                flowMon0 = flowHelper.Install(ueNodes[i].Get(j));
+            // } else {
+                flowMon1 = flowHelper.Install(ueNodes[i].Get(j));
+            // }
+        }
+    }
+
+    CalculateThroughput(flowMon0, throughputArray0);
+    CalculateThroughput(flowMon1, throughputArray1);
     Simulator::Stop(simTime);
     Simulator::Run();
+    flowMonitor->SerializeToXmlFile("flow-data.xml", true, true);
+
 
     // GtkConfigStore config;
     // config.ConfigureAttributes ();
 
+
     Simulator::Destroy();
+    CalculateCumulativeThroughput();
     return 0;
 }
+
