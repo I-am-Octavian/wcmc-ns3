@@ -22,27 +22,72 @@ vector<uint32_t> throughputArray0;
 vector<uint32_t> throughputArray1;
 uint16_t numberOfUes = 10;
 uint16_t numberOfEnbs = 4;
-FlowMonitorHelper flowHelper;
+FlowMonitorHelper flowHelper0;
+FlowMonitorHelper flowHelper1;
+
+static void
+PlotGraph3(Ptr<FlowMonitor> mon1, Ptr<FlowMonitor> mon2, NodeContainer* cont) {
+    for (int i = 0; i < numberOfEnbs; i++) {
+        for (int j = 0; j < numberOfUes;j++) {
+            Ptr<MobilityModel> mobility =
+                cont[i].Get(j)->GetObject<MobilityModel>();
+
+            std::cout << "Mobility\n\n" << mobility->GetVelocity().x << " " << mobility->GetVelocity().y << std::endl;
+            if (mobility->GetVelocity().x == 0 && mobility->GetVelocity().y == 0) {
+                std::cout << "MON1\n";
+                mon1 = flowHelper0.Install(cont[i].Get(j));
+            } else {
+                std::cout << "MON2\n";
+                mon2 = flowHelper1.Install(cont[i].Get(j));
+            }
+
+        }
+    }
+}
+
+static void
+PlotGraph4(Ptr<FlowMonitor> mon, Ptr<Node> node) {
+    std::ofstream os;
+    os.open("graph/graph5RR.txt", std::ios::app);
+    std::map<FlowId, FlowMonitor::FlowStats> stats = mon->GetFlowStats ();
+    std::cout << "SIZE: " << stats.size() << std::endl;
+    for (auto i = stats.begin (); i != stats.end (); ++i)
+    {
+        Ptr<MobilityModel> mobility =
+            node->GetObject<MobilityModel>();
+        os << i->second.txBytes * 8.0 / 10.0 / 1024 / 1024 << " "
+            << Simulator::Now().GetSeconds()  << std::endl;
+
+    }
+
+    Simulator::Schedule(Seconds(1.0), &PlotGraph4, mon, node);
+}
 
 
 static void
-CalculateThroughput(Ptr<FlowMonitor> monitor, vector<uint32_t>& array) {
+CalculateThroughput(Ptr<FlowMonitor> monitor, bool flag
+        ) {
     // FlowMonitorHelper flowmon;
     // Ptr<Ipv4FlowClassifier> classifier = DynamicCast<Ipv4FlowClassifier> (flowmon.GetClassifier ());
     std::map<FlowId, FlowMonitor::FlowStats> stats = monitor->GetFlowStats ();
+    std::cout << "SIZE: " << stats.size() << std::endl;
     for (auto i = stats.begin (); i != stats.end (); ++i)
     {
           // Ipv4FlowClassifier::FiveTuple t = classifier->FindFlow (i->first);
+        if (flag) {
+          throughputArray0.push_back(i->second.rxBytes);
+        } else {
+          throughputArray1.push_back(i->second.rxBytes);
+        }
           std::cout << "Flow at " << Simulator::Now().GetSeconds()  << " " <<  i->first - 1 << "\n";
          std::cout << "  Tx Bytes:   " << i->second.txBytes << "\n";
          std::cout << "  Rx Bytes:   " << i->second.rxBytes << "\n";
           std::cout << " Throughput: " << i->second.txBytes * 8.0 / 10.0 / 1024 / 1024  << " Mbps\n";
 
           // in
-          array.push_back(i->second.rxBytes);
     }
 
-    Simulator::Schedule(Seconds(1.0), &CalculateThroughput, monitor, array);
+    Simulator::Schedule(Seconds(1.0), &CalculateThroughput, monitor, flag);
 }
 
 
@@ -57,7 +102,10 @@ CalculateCumulativeThroughput() {
     if (!throughputArray0.empty()) {
         sort(throughputArray0.begin(), throughputArray0.end());
         prev0 = throughputArray0[0];
+    } else  {
+        std::cout << "Array is empty" << std::endl;
     }
+
 
     uint32_t prev1;
     if (!throughputArray1.empty()) {
@@ -66,19 +114,33 @@ CalculateCumulativeThroughput() {
     }
 
 
+    std::cout << "Array size : " << throughputArray0.size() << std::endl;
     for (int i = 1; i < throughputArray0.size(); i++) {
         if (throughputArray0[i] != prev0) {
             os0 << throughputArray0[i] << " " << i << std::endl;
+            std::cout << throughputArray0[i] << " " << i << std::endl;
             prev0 = throughputArray0[i];
+        } else if (i == throughputArray0.size() -1) {
+            os0 << throughputArray0[i] << " " << i << std::endl;
+            std::cout << throughputArray0[i] << " " << i << std::endl;
         }
     }
 
     for (int i = 1; i < throughputArray1.size(); i++) {
         if (throughputArray1[i] != prev1) {
             os1 << throughputArray1[i] << " " << i << std::endl;
+            std::cout << throughputArray1[i] << " " << i << std::endl;
             prev1 = throughputArray1[i];
+        } else if (i == throughputArray0.size() -1) {
+            os0 << throughputArray1[i] << " " << i << std::endl;
+            std::cout << throughputArray1[i] << " " << i << std::endl;
         }
     }
+    os0.close();
+    os1.close();
+
+    Simulator::Schedule(Seconds(1.0), &CalculateCumulativeThroughput);
+
 }
 
 // to write the velocity from callback
@@ -251,7 +313,7 @@ int
 main(int argc, char* argv[])
 {
     // Command line arguments
-    std::string scheduler = "RR";
+    std::string scheduler = "MT";
 	float speed = 0.f;
 	unsigned int rngRun = 1;
 	bool fullBufferFlag = false;
@@ -305,7 +367,7 @@ main(int argc, char* argv[])
     LogComponentEnable("UdpServer", LOG_LEVEL_ALL);
 
     uint16_t numBearersPerUe = 1;
-    Time simTime = Seconds(10.0);
+    Time simTime = Seconds(3);
     bool disableDl = false;
     bool disableUl = false;
 
@@ -350,8 +412,6 @@ main(int argc, char* argv[])
 
     // Create the Internet
     PointToPointHelper p2ph;
-    p2ph.SetQueue("ns3::DropTailQueue",
-               "MaxSize", StringValue("1p"));
     p2ph.SetDeviceAttribute("DataRate", DataRateValue(DataRate("100Gb/s")));
     p2ph.SetDeviceAttribute("Mtu", UintegerValue(1500));
     p2ph.SetChannelAttribute("Delay", TimeValue(Seconds(0.010)));
@@ -379,9 +439,9 @@ main(int argc, char* argv[])
     // Install Mobility Model
     Ptr<ListPositionAllocator> positionAlloc = CreateObject<ListPositionAllocator>();
     positionAlloc->Add(Vector(0.0, 0.0, 0.0));
-    positionAlloc->Add(Vector(500.0, 0.0, 0.0));
-    positionAlloc->Add(Vector(500.0, 500.0, 0.0));
-    positionAlloc->Add(Vector(0.0, 500.0, 0.0));
+    positionAlloc->Add(Vector(5000.0, 0.0, 0.0));
+    positionAlloc->Add(Vector(5000.0, 5000.0, 0.0));
+    positionAlloc->Add(Vector(0.0, 5000.0, 0.0));
 
     // setting the position of ENBs
     MobilityHelper enbMobility;
@@ -401,8 +461,9 @@ main(int argc, char* argv[])
     ueMobility.SetMobilityModel ("ns3::RandomWalk2dMobilityModel",
                              "Bounds", RectangleValue (Rectangle (-1000, 6000, -1000, 6000)), // Setting bounds
                              "Speed", PointerValue (bi),
-                             "Distance", DoubleValue (100), // The distance to travel before changing direction
-                             "Time", TimeValue (Seconds (1.0))); // The time to travel before changing direction
+                             "Mode", StringValue("Time"),
+                             // "Distance", DoubleValue (100), // The distance to travel before changing direction
+                             "Time", TimeValue (Seconds (10.0))); // The time to travel before changing direction
 
 
     uint32_t counter = 0;
@@ -519,8 +580,8 @@ main(int argc, char* argv[])
 
                 lteHelper->ActivateDedicatedEpsBearer(ueLteDevs[i].Get(u), bearer, tft);
 
-                ueLteDevs[i].Get(u)->TraceConnectWithoutContext(
-                        "Tx", MakeCallback(&BytesTransferredCallback));
+                // ueLteDevs[i].Get(u)->TraceConnectWithoutContext(
+                //         "Tx", MakeCallback(&BytesTransferredCallback));
 
 
                 serverApps.Start(MilliSeconds(500));
@@ -608,8 +669,10 @@ main(int argc, char* argv[])
     // graph 3
     Ptr<const MobilityModel> mobility = ueNodes[0].Get(0)->GetObject<MobilityModel>();
     std::cout << mobility->GetPosition().x << std::endl;
-    flowMonitor = flowHelper.Install(ueNodes[0].Get(0));
+    flowMon0 = flowHelper0.Install(remoteHost);
+    flowMon1 = flowHelper1.Install(remoteHost);
 
+    std::cout << NodeList::GetNNodes() << std::endl;
 
     for (int i = 0; i < numberOfEnbs; i++) {
         for (int j = 0; j < numberOfUes;j++) {
@@ -617,26 +680,39 @@ main(int argc, char* argv[])
                 ueNodes[i].Get(j)->GetObject<MobilityModel>();
             std::cout << "Mobility\n\n" << mobility->GetVelocity().x << " " << mobility->GetVelocity().y << std::endl;
             // if (mobility->GetVelocity().x != 0) {
-                flowMon0 = flowHelper.Install(ueNodes[i].Get(j));
+                // flowMon0 = flowHelper.Install(ueNodes[i].Get(j));
             // } else {
-                flowMon1 = flowHelper.Install(ueNodes[i].Get(j));
+                // flowMon1 = flowHelper.Install(ueNodes[i].Get(j));
             // }
         }
     }
 
-    CalculateThroughput(flowMon0, throughputArray0);
-    CalculateThroughput(flowMon1, throughputArray1);
+    // for GRAPH3
+    Simulator::Schedule(Seconds(0.1), &PlotGraph3, flowMon0, flowMon1, &ueNodes[0]);
+
+    Simulator::Schedule(Seconds(1.1), &CalculateThroughput, flowMon0, true);
+    Simulator::Schedule(Seconds(1.1), &CalculateThroughput, flowMon1, false);
+
+    // for GRAPH4
+    // Simulator::Schedule(Seconds(1.1), &PlotGraph4, flowMon0, ueNodes[0].Get(0));
+    // PlotGraph4(flowMon0, ueNodes[0].Get(0));
+
+    // Simulator::Schedule(Seconds(1.1), &CalculateThroughput, flowMonitor, std::ref(throughputArray1));
+    // CalculateThroughput(flowMon0, throughputArray0);
+    // CalculateThroughput(flowMon1, throughputArray1);
+    Simulator::Schedule(Seconds(0.5), &CalculateCumulativeThroughput);
     Simulator::Stop(simTime);
     Simulator::Run();
-    flowMonitor->SerializeToXmlFile("flow-data.xml", true, true);
 
 
     // GtkConfigStore config;
     // config.ConfigureAttributes ();
 
 
+    flowMon0->SerializeToXmlFile("flowMon0.tr", false, false);
+    flowMon1->SerializeToXmlFile("flowMon1.tr", false, false);
     Simulator::Destroy();
-    CalculateCumulativeThroughput();
+
     return 0;
 }
 
