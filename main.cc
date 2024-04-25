@@ -204,10 +204,15 @@ void GetMCS() {
     std::cout << ret << std::endl;
     Simulator::Schedule (Seconds (0.1), &GetMCS);
 };
+const int TOT_COUNT = 12;
+int currCount = 1;
 
 void
 SetMCS(NetDeviceContainer* ndc)
 {
+    Ns3AiMsgInterfaceImpl<MCSFeature, MCSPredicted>* msgInterface =
+        Ns3AiMsgInterface::Get()->GetInterface<MCSFeature, MCSPredicted>();
+
     Ptr<NetDevice> netDevice;
     for(int j = 0; j < 4; ++j)
     {
@@ -217,7 +222,6 @@ SetMCS(NetDeviceContainer* ndc)
             netDevice = (*i);
 
             Ptr<MobilityModel> mobility = netDevice->GetNode()->GetObject<MobilityModel>();
-            Vector pos = mobility->GetPosition();
 
             Ptr<LteUeNetDevice> lteUe = DynamicCast<LteUeNetDevice>(netDevice);
             if (lteUe)
@@ -231,36 +235,42 @@ SetMCS(NetDeviceContainer* ndc)
                 // }
                 // Sending the model velocities
                 NS_LOG_UNCOND(mobility->GetPosition().x << ',' << mobility->GetPosition().y);
-
                 float x = mobility->GetPosition().x;
                 float y =mobility->GetPosition().y;
                 float decX = 0, decY = 0;
-
                 decX = (x - (int)x) * 1000;
                 decY = (y - (int)y) * 1000;
 
 
-                Ns3AiMsgInterfaceImpl<MCSFeature, MCSPredicted>* msgInterface =
-                    Ns3AiMsgInterface::Get()->GetInterface<MCSFeature, MCSPredicted>();
-                msgInterface->CppSendBegin();
-                msgInterface->GetCpp2PyStruct()->posX = (int)x;
-                msgInterface->GetCpp2PyStruct()->posY = (int)y;
-                msgInterface->GetCpp2PyStruct()->decimalX = (int)decX;
-                msgInterface->GetCpp2PyStruct()->decimalY = (int)decY;
-                msgInterface->CppSendEnd();
+                if (TOT_COUNT > currCount) {
+                    msgInterface->CppSendBegin();
+                    msgInterface->GetCpp2PyStruct()->posX = (int)x;
+                    msgInterface->GetCpp2PyStruct()->posY = (int)y;
+                    msgInterface->GetCpp2PyStruct()->decimalX = (int)decX;
+                    msgInterface->GetCpp2PyStruct()->decimalY = (int)decY;
+                    msgInterface->CppSendEnd();
+                }
+                else {
+                    msgInterface->CppSendBegin();
+                    msgInterface->GetCpp2PyStruct()->posX = (int)x;
+                    msgInterface->GetCpp2PyStruct()->posY = (int)y;
+                    msgInterface->GetCpp2PyStruct()->decimalX = (int)decX;
+                    msgInterface->GetCpp2PyStruct()->decimalY = (int)decY;
+                    msgInterface->CppSendEnd();
 
-
-                std::cout << "MCS MCS\n";
-                msgInterface->CppRecvBegin();
-                uint32_t ret = msgInterface->GetPy2CppStruct()->mcsPredicted;
-                msgInterface->CppRecvEnd();
-
-                std::cout << ret << std::endl;
+                    std::cout << "MCS MCS\n";
+                    msgInterface->CppRecvBegin();
+                    uint32_t ret = msgInterface->GetPy2CppStruct()->mcsPredicted;
+                    msgInterface->CppRecvEnd();
+                    std::cout << ret << std::endl;
+                }
+                currCount++;
+                std::cout << "COUNTER: " << currCount << std::endl;
             }
         }
     }
 
-    Simulator::Schedule (Seconds (0.1), &SetMCS, ndc);
+    Simulator::Schedule (Seconds (0.2), &SetMCS, ndc);
 }
 
 
@@ -290,7 +300,7 @@ main(int argc, char* argv[])
     const uint16_t numberOfUes = 10;
     const uint16_t numberOfEnbs = 4;
     uint16_t numBearersPerUe = 1;
-    Time simTime = Seconds(1); //NOTE: Not using Bi random var
+    Time simTime = Seconds(10); //NOTE: Not using Bi random var
     // double distance = 100.0;
     bool disableDl = false;
     bool disableUl = true;
@@ -597,16 +607,11 @@ main(int argc, char* argv[])
     //Config::Connect("/NodeList/*/DeviceList/*/LteEnbRrc/HandoverFailureJoining",
     //                MakeCallback(&NotifyHandoverFailure));
 
-    // MCS::SetMCS(ueLteDevs);
-    // MCS::GetMCS();
 
-    int NUM_ENV = 1000000;
     auto interface = Ns3AiMsgInterface::Get();
     interface->SetIsMemoryCreator(false);
     interface->SetUseVector(false);
     interface->SetHandleFinish(true);
-    Ns3AiMsgInterfaceImpl<MCSFeature, MCSPredicted>* msgInterface =
-        interface->GetInterface<MCSFeature, MCSPredicted>();
 
     unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
     std::mt19937 gen(seed);
@@ -635,9 +640,7 @@ main(int argc, char* argv[])
 
     Ptr<FlowMonitor> monitor = flowHelper.InstallAll();
 
-    // Simulator::Schedule (Seconds (0.1), &GetMCS);
     Simulator::Schedule (Seconds (0.1), &SetMCS, ueLteDevs);
-    // GetMCS();
 
 
     Simulator::Stop(simTime + MilliSeconds(20));
