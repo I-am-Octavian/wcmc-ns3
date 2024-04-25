@@ -173,20 +173,6 @@ depend:
 .PHONY : depend
 
 # Convenience name for target.
-assignment/CMakeFiles/assignment-lib.dir/rule:
-	cd /home/ansu/dev/ns-3-dev-git && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 assignment/CMakeFiles/assignment-lib.dir/rule
-.PHONY : assignment/CMakeFiles/assignment-lib.dir/rule
-
-# Convenience name for target.
-assignment-lib: assignment/CMakeFiles/assignment-lib.dir/rule
-.PHONY : assignment-lib
-
-# fast build rule for target.
-assignment-lib/fast:
-	cd /home/ansu/dev/ns-3-dev-git && $(MAKE) $(MAKESILENT) -f assignment/CMakeFiles/assignment-lib.dir/build.make assignment/CMakeFiles/assignment-lib.dir/build
-.PHONY : assignment-lib/fast
-
-# Convenience name for target.
 assignment/CMakeFiles/assignment.dir/rule:
 	cd /home/ansu/dev/ns-3-dev-git && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 assignment/CMakeFiles/assignment.dir/rule
 .PHONY : assignment/CMakeFiles/assignment.dir/rule
@@ -219,7 +205,6 @@ main.o: main.cc.o
 
 # target to build an object file
 main.cc.o:
-	cd /home/ansu/dev/ns-3-dev-git && $(MAKE) $(MAKESILENT) -f assignment/CMakeFiles/assignment-lib.dir/build.make assignment/CMakeFiles/assignment-lib.dir/main.cc.o
 	cd /home/ansu/dev/ns-3-dev-git && $(MAKE) $(MAKESILENT) -f assignment/CMakeFiles/assignment.dir/build.make assignment/CMakeFiles/assignment.dir/main.cc.o
 .PHONY : main.cc.o
 
@@ -228,7 +213,6 @@ main.i: main.cc.i
 
 # target to preprocess a source file
 main.cc.i:
-	cd /home/ansu/dev/ns-3-dev-git && $(MAKE) $(MAKESILENT) -f assignment/CMakeFiles/assignment-lib.dir/build.make assignment/CMakeFiles/assignment-lib.dir/main.cc.i
 	cd /home/ansu/dev/ns-3-dev-git && $(MAKE) $(MAKESILENT) -f assignment/CMakeFiles/assignment.dir/build.make assignment/CMakeFiles/assignment.dir/main.cc.i
 .PHONY : main.cc.i
 
@@ -237,7 +221,6 @@ main.s: main.cc.s
 
 # target to generate assembly for a file
 main.cc.s:
-	cd /home/ansu/dev/ns-3-dev-git && $(MAKE) $(MAKESILENT) -f assignment/CMakeFiles/assignment-lib.dir/build.make assignment/CMakeFiles/assignment-lib.dir/main.cc.s
 	cd /home/ansu/dev/ns-3-dev-git && $(MAKE) $(MAKESILENT) -f assignment/CMakeFiles/assignment.dir/build.make assignment/CMakeFiles/assignment.dir/main.cc.s
 .PHONY : main.cc.s
 
@@ -282,7 +265,6 @@ help:
 	@echo "... rebuild_cache"
 	@echo "... test"
 	@echo "... assignment"
-	@echo "... assignment-lib"
 	@echo "... ns3ai_rnn_py"
 	@echo "... main.o"
 	@echo "... main.i"

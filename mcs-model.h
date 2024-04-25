@@ -8,12 +8,14 @@
 namespace ns3 {
 
 typedef struct {
-    float posX;
-    float posY;
+    int posX;
+    int posY;
+    int decimalX;
+    int decimalY;
 } MCSFeature;
 
 typedef struct {
-    uint32_t mcsPredicted;
+    int64_t mcsPredicted;
 } MCSPredicted;
 
 

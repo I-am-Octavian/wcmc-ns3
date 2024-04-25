@@ -194,13 +194,13 @@ class ConstVariable: public RandomVariableStream {
 
 void GetMCS() {
     // Communicating with the AI
+    std::cout << "MCS MCS\n";
     Ns3AiMsgInterfaceImpl<MCSFeature, MCSPredicted>* msgInterface =
         Ns3AiMsgInterface::Get()->GetInterface<MCSFeature, MCSPredicted>();
     msgInterface->CppRecvBegin();
     uint32_t ret = msgInterface->GetPy2CppStruct()->mcsPredicted;
     msgInterface->CppRecvEnd();
 
-    std::cout << "MCS MCS\n";
     std::cout << ret << std::endl;
     Simulator::Schedule (Seconds (0.1), &GetMCS);
 };
@@ -228,15 +228,34 @@ SetMCS(NetDeviceContainer* ndc)
                 // {
                 //     uint8_t mcs = ns3::PhyRxStatsCalculator::imsiToMcs[imsi];
                     // NS_LOG_UNCOND(imsi << ',' << pos.x << ',' << pos.y << ',' << (int)mcs);
-                    NS_LOG_UNCOND(mobility->GetVelocity().x << ',' << mobility->GetVelocity().y);
                 // }
                 // Sending the model velocities
+                NS_LOG_UNCOND(mobility->GetPosition().x << ',' << mobility->GetPosition().y);
+
+                float x = mobility->GetPosition().x;
+                float y =mobility->GetPosition().y;
+                float decX = 0, decY = 0;
+
+                decX = (x - (int)x) * 1000;
+                decY = (y - (int)y) * 1000;
+
+
                 Ns3AiMsgInterfaceImpl<MCSFeature, MCSPredicted>* msgInterface =
                     Ns3AiMsgInterface::Get()->GetInterface<MCSFeature, MCSPredicted>();
                 msgInterface->CppSendBegin();
-                msgInterface->GetCpp2PyStruct()->posX = mobility->GetPosition().x;
-                msgInterface->GetCpp2PyStruct()->posY = mobility->GetPosition().y;
+                msgInterface->GetCpp2PyStruct()->posX = (int)x;
+                msgInterface->GetCpp2PyStruct()->posY = (int)y;
+                msgInterface->GetCpp2PyStruct()->decimalX = (int)decX;
+                msgInterface->GetCpp2PyStruct()->decimalY = (int)decY;
                 msgInterface->CppSendEnd();
+
+
+                std::cout << "MCS MCS\n";
+                msgInterface->CppRecvBegin();
+                uint32_t ret = msgInterface->GetPy2CppStruct()->mcsPredicted;
+                msgInterface->CppRecvEnd();
+
+                std::cout << ret << std::endl;
             }
         }
     }
@@ -616,8 +635,9 @@ main(int argc, char* argv[])
 
     Ptr<FlowMonitor> monitor = flowHelper.InstallAll();
 
+    // Simulator::Schedule (Seconds (0.1), &GetMCS);
     Simulator::Schedule (Seconds (0.1), &SetMCS, ueLteDevs);
-    Simulator::Schedule (Seconds (0.1), &GetMCS);
+    // GetMCS();
 
 
     Simulator::Stop(simTime + MilliSeconds(20));

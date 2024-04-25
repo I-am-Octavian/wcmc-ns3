@@ -13,7 +13,9 @@ PYBIND11_MODULE(ns3ai_rnn_py, m)
     py::class_<MCSFeature>(m, "PyEnvStruct")
         .def(py::init<>())
         .def_readwrite("posX", &MCSFeature::posX)
-        .def_readwrite("posY", &MCSFeature::posY);
+        .def_readwrite("posY", &MCSFeature::posY)
+        .def_readwrite("decimalX", &MCSFeature::decimalX)
+        .def_readwrite("decimalY", &MCSFeature::decimalY);
 
     py::class_<MCSPredicted>(m, "PyActStruct")
         .def(py::init<>()).def_readwrite("mcsPredicted", &MCSPredicted::mcsPredicted);

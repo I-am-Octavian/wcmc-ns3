@@ -1,0 +1,2 @@
+/usr/bin/ar qc ../build/lib/libassignment-lib.a "CMakeFiles/assignment-lib.dir/main.cc.o"
+/usr/bin/ranlib ../build/lib/libassignment-lib.a

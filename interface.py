@@ -16,13 +16,22 @@ try:
             print("Something")
             break
         # calculate the sum
-        temp = msgInterface.GetCpp2PyStruct().posX + msgInterface.GetCpp2PyStruct().posY
+        x = msgInterface.GetCpp2PyStruct().posX
+        y = msgInterface.GetCpp2PyStruct().posY
+        decY = msgInterface.GetCpp2PyStruct().decimalY
+        decX = msgInterface.GetCpp2PyStruct().decimalX
         msgInterface.PyRecvEnd()
+        print(str(x) + " " + str(y))
+        print(str(decX) + " " + str(decY))
 
         # send to C++ side
         msgInterface.PySendBegin()
-        msgInterface.GetPy2CppStruct().mcsPredicted = temp
+        if msgInterface.PyGetFinished():
+            print("Something")
+            break
+        msgInterface.GetPy2CppStruct().mcsPredicted = x+y
         msgInterface.PySendEnd()
+        print(str(x) + " " + str(y))
 
 except Exception as e:
     exc_type, exc_value, exc_traceback = sys.exc_info()

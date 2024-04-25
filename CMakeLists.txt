@@ -1,11 +1,11 @@
-add_library(assignment-lib main.cc)
+# add_library(assignment-lib main.cc)
 build_exec(
         EXECNAME assignment
         SOURCE_FILES
             main.cc
             py_module.cc
         LIBRARIES_TO_LINK
-            assignment-lib
+            # assignment-lib
             ${libai}
             ${libcore}
             ${libpoint-to-point}
