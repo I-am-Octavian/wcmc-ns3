@@ -204,7 +204,7 @@ void GetMCS() {
     std::cout << ret << std::endl;
     Simulator::Schedule (Seconds (0.1), &GetMCS);
 };
-const int TOT_COUNT = 12;
+const int TOT_COUNT = 100;
 int currCount = 1;
 
 void
@@ -214,29 +214,25 @@ SetMCS(NetDeviceContainer* ndc)
         Ns3AiMsgInterface::Get()->GetInterface<MCSFeature, MCSPredicted>();
 
     Ptr<NetDevice> netDevice;
-    for(int j = 0; j < 4; ++j)
+#if 0
+    for(int j = 0; j < 1; ++j)
     {
         NetDeviceContainer c = ndc[j];
-        for (auto i = c.Begin(); i != c.End(); ++i)
+        netDevice = (*c.Begin());
+        
+        Ptr<MobilityModel> mobility = netDevice->GetNode()->GetObject<MobilityModel>();
+        float x = mobility->GetPosition().x;
+        float y =mobility->GetPosition().y;
+
+        Ptr<LteUeNetDevice> lteUe = DynamicCast<LteUeNetDevice>(netDevice);
+        if (lteUe)
         {
-            netDevice = (*i);
-
-            Ptr<MobilityModel> mobility = netDevice->GetNode()->GetObject<MobilityModel>();
-
-            Ptr<LteUeNetDevice> lteUe = DynamicCast<LteUeNetDevice>(netDevice);
-            if (lteUe)
+            Ptr<LteUeRrc> ueRrc = lteUe->GetRrc();
+            uint64_t imsi = ueRrc->GetImsi();
+            if(ns3::PhyRxStatsCalculator::imsiToMcs.contains(imsi))
             {
-                // Ptr<LteUeRrc> ueRrc = lteUe->GetRrc();
-                // uint64_t imsi = ueRrc->GetImsi();
-                // if(ns3::PhyRxStatsCalculator::imsiToMcs.contains(imsi))
-                // {
-                //     uint8_t mcs = ns3::PhyRxStatsCalculator::imsiToMcs[imsi];
-                    // NS_LOG_UNCOND(imsi << ',' << pos.x << ',' << pos.y << ',' << (int)mcs);
-                // }
+                uint8_t mcs = ns3::PhyRxStatsCalculator::imsiToMcs[imsi];
                 // Sending the model velocities
-                NS_LOG_UNCOND(mobility->GetPosition().x << ',' << mobility->GetPosition().y);
-                float x = mobility->GetPosition().x;
-                float y =mobility->GetPosition().y;
                 float decX = 0, decY = 0;
                 decX = (x - (int)x) * 1000;
                 decY = (y - (int)y) * 1000;
@@ -258,17 +254,69 @@ SetMCS(NetDeviceContainer* ndc)
                     msgInterface->GetCpp2PyStruct()->decimalY = (int)decY;
                     msgInterface->CppSendEnd();
 
-                    std::cout << "MCS MCS\n";
                     msgInterface->CppRecvBegin();
                     uint32_t ret = msgInterface->GetPy2CppStruct()->mcsPredicted;
                     msgInterface->CppRecvEnd();
-                    std::cout << ret << std::endl;
+                    NS_LOG_UNCOND(x << ' ' << y << ' ' << (int)mcs << ' ' << ret);
                 }
                 currCount++;
-                std::cout << "COUNTER: " << currCount << std::endl;
+            }
+        }
+        
+    }
+#else
+    for(int j = 0; j < 4; ++j)
+    {
+        NetDeviceContainer c = ndc[j];
+        for (auto i = c.Begin(); i != c.End(); ++i)
+        {
+            netDevice = (*i);
+
+            Ptr<MobilityModel> mobility = netDevice->GetNode()->GetObject<MobilityModel>();
+            float x = mobility->GetPosition().x;
+            float y =mobility->GetPosition().y;
+
+            Ptr<LteUeNetDevice> lteUe = DynamicCast<LteUeNetDevice>(netDevice);
+            if (lteUe)
+            {
+                Ptr<LteUeRrc> ueRrc = lteUe->GetRrc();
+                uint64_t imsi = ueRrc->GetImsi();
+                if(ns3::PhyRxStatsCalculator::imsiToMcs.contains(imsi))
+                {
+                    uint8_t mcs = ns3::PhyRxStatsCalculator::imsiToMcs[imsi];
+                    // Sending the model velocities
+                    float decX = 0, decY = 0;
+                    decX = (x - (int)x) * 1000;
+                    decY = (y - (int)y) * 1000;
+
+
+                    if (TOT_COUNT > currCount) {
+                        msgInterface->CppSendBegin();
+                        msgInterface->GetCpp2PyStruct()->posX = (int)x;
+                        msgInterface->GetCpp2PyStruct()->posY = (int)y;
+                        msgInterface->GetCpp2PyStruct()->decimalX = (int)decX;
+                        msgInterface->GetCpp2PyStruct()->decimalY = (int)decY;
+                        msgInterface->CppSendEnd();
+                    }
+                    else {
+                        msgInterface->CppSendBegin();
+                        msgInterface->GetCpp2PyStruct()->posX = (int)x;
+                        msgInterface->GetCpp2PyStruct()->posY = (int)y;
+                        msgInterface->GetCpp2PyStruct()->decimalX = (int)decX;
+                        msgInterface->GetCpp2PyStruct()->decimalY = (int)decY;
+                        msgInterface->CppSendEnd();
+
+                        msgInterface->CppRecvBegin();
+                        uint32_t ret = msgInterface->GetPy2CppStruct()->mcsPredicted;
+                        msgInterface->CppRecvEnd();
+                        NS_LOG_UNCOND("pred " << x << ' ' << y << ' ' << (int)mcs << ' ' << ret);
+                    }
+                    currCount++;
+                }
             }
         }
     }
+#endif
 
     Simulator::Schedule (Seconds (0.2), &SetMCS, ndc);
 }
@@ -300,11 +348,11 @@ main(int argc, char* argv[])
     const uint16_t numberOfUes = 10;
     const uint16_t numberOfEnbs = 4;
     uint16_t numBearersPerUe = 1;
-    Time simTime = Seconds(10); //NOTE: Not using Bi random var
+    Time simTime = Seconds(50); //NOTE: Not using Bi random var
     // double distance = 100.0;
     bool disableDl = false;
     bool disableUl = true;
-    std::string schType = "ns3::FdMtFfMacScheduler";
+    std::string schType = "ns3::PfFfMacScheduler";
 
     uint32_t ulResourceBlocks = 50;
     uint32_t dlResourceBlocks = 50;
@@ -329,7 +377,7 @@ main(int argc, char* argv[])
     // change some default attributes so that they are reasonable for
     // this scenario, but do this before processing command line
     // arguments, so that the user is allowed to override these settings
-    Config::SetDefault("ns3::UdpClient::Interval", TimeValue(MilliSeconds(10)));
+    Config::SetDefault("ns3::UdpClient::Interval", TimeValue(MilliSeconds(8)));
     //Config::SetDefault("ns3::UdpClient::MaxPackets", UintegerValue(4000000000));
     Config::SetDefault("ns3::UdpClient::PacketSize", UintegerValue(1500));
     Config::SetDefault("ns3::LteHelper::UseIdealRrc", BooleanValue(false));
@@ -486,6 +534,9 @@ main(int argc, char* argv[])
     startTimeSeconds->SetAttribute("Min", DoubleValue(0.05));
     startTimeSeconds->SetAttribute("Max", DoubleValue(0.06));
 
+    ApplicationContainer clientApps;
+    ApplicationContainer serverApps;
+
     for (int i = 0; i < numberOfEnbs; i++) {
         for (uint32_t u = 0; u < numberOfUes; ++u)
         {
@@ -497,8 +548,6 @@ main(int argc, char* argv[])
 
             for (uint32_t b = 0; b < numBearersPerUe; ++b)
             {
-                ApplicationContainer clientApps;
-                ApplicationContainer serverApps;
                 Ptr<EpcTft> tft = Create<EpcTft>();
 
                 if (!disableDl)
@@ -544,14 +593,13 @@ main(int argc, char* argv[])
                 // FIXED
                 lteHelper->ActivateDedicatedEpsBearer(ueLteDevs[i].Get(u), bearer, tft);
 
-                Time startTime = Seconds(startTimeSeconds->GetValue());
-                serverApps.Start(startTime);
-                clientApps.Start(startTime);
-                clientApps.Stop(simTime);
-
             } // end for b
         }
     }
+    Time startTime = Seconds(startTimeSeconds->GetValue());
+    serverApps.Start(startTime);
+    clientApps.Start(startTime);
+    clientApps.Stop(simTime);
 
     // Add X2 interface
     lteHelper->AddX2Interface(enbNodes);
@@ -648,25 +696,23 @@ main(int argc, char* argv[])
 
     flowHelper.SerializeToXmlFile ("scratch.flowmonitor", true, true);
 
-    NS_LOG_UNCOND("Here");
-    monitor->CheckForLostPackets();
-    auto stats = monitor->GetFlowStats();
-    NS_LOG_UNCOND(stats.size());
+    NS_LOG_UNCOND("server " << DynamicCast<PacketSink>(serverApps.Get(0))->GetTotalRx());
+    
+    //Ptr<PacketSink> sink = DynamicCast<PacketSink> (sinkApps.Get (0));
+    //std::cout << "Total Packets Received: " << sink->GetTotalRx () << std::endl;
 
-    float average_throughput = 0;
+    flowHelper.SerializeToXmlFile ("scratch.flowmonitor", true, true);
 
-    counter = 0;
-    for(const auto& flow : stats)
+    uint64_t totalRx = 0;
+    for(size_t i = 0; i < serverApps.GetN(); ++i)
     {
-        // Change to GetMiliSeconds()
-        float throughput = (flow.second.rxBytes*8.0/(flow.second.timeLastRxPacket.GetSeconds() - flow.second.timeFirstRxPacket.GetSeconds()) /1024/1024);
-        if (throughput > 0)
-        {
-            ++counter;
-            average_throughput += throughput;
-        }
+        Ptr<PacketSink> sink = DynamicCast<PacketSink>(serverApps.Get(i));
+        totalRx += sink->GetTotalRx();
     }
-    NS_LOG_UNCOND(counter);
+    NS_LOG_UNCOND("Simulation Run for " << simTime.GetSeconds());
+    NS_LOG_UNCOND("Total Rx packets = " << totalRx);
+    double throughput = totalRx*8.0/simTime.GetSeconds() /1024 /1024;
+    NS_LOG_UNCOND("Aggregate throughput = " << throughput << "Mbps");
 
 // Yashwanth's Code for throughput:-
 //if (i->second.rxPackets > 0)
@@ -679,7 +725,6 @@ main(int argc, char* argv[])
 //
 //            outFile << "  Throughput: " << i->second.rxBytes * 8.0 /
 
-    NS_LOG_UNCOND(average_throughput / 44);
     // GtkConfigStore config;
     // config.ConfigureAttributes ();
 
