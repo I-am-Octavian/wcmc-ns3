@@ -8,6 +8,7 @@
 #include "ns3/flow-monitor-helper.h"
 #include "ns3/animation-interface.h"
 #include "ns3/ai-module.h"
+#include <cstdint>
 
 #include "mcs-model.h"
 
@@ -18,6 +19,139 @@ using std::vector;
 
 NS_LOG_COMPONENT_DEFINE("ASSIGNMENT");
 
+const uint16_t numberOfUes = 10;
+const uint16_t numberOfEnbs = 4;
+FlowMonitorHelper flowHelper0;
+FlowMonitorHelper flowHelper1;
+vector<uint32_t> throughputArray0;
+vector<uint32_t> throughputArray1;
+std::string schType = "RR";
+float speed = 0;
+
+static void
+PlotGraph3(Ptr<FlowMonitor> mon0, Ptr<FlowMonitor> mon1, NodeContainer* cont) {
+    for (int i = 0; i < numberOfEnbs; i++) {
+        for (int j = 0; j < numberOfUes;j++) {
+            Ptr<MobilityModel> mobility =
+                cont[i].Get(j)->GetObject<MobilityModel>();
+
+            if (mobility->GetVelocity().x + mobility->GetVelocity().y == 0) {
+                std::cout << "MON1\n";
+                mon0 = flowHelper0.Install(cont[i].Get(j));
+            } else {
+                std::cout << "MON2\n";
+                mon1 = flowHelper1.Install(cont[i].Get(j));
+            }
+            std::cout << "Mobility\n\n" << mobility->GetVelocity().x << " " << mobility->GetVelocity().y << std::endl;
+        }
+    }
+}
+
+static void
+CalculateThroughput(Ptr<FlowMonitor> monitor, bool flag) {
+    // FlowMonitorHelper flowmon;
+    // Ptr<Ipv4FlowClassifier> classifier = DynamicCast<Ipv4FlowClassifier> (flowmon.GetClassifier ());
+    std::map<FlowId, FlowMonitor::FlowStats> stats = monitor->GetFlowStats ();
+    std::cout << "SIZE: " << stats.size() << std::endl;
+    for (auto i = stats.begin (); i != stats.end (); ++i)
+    {
+          // Ipv4FlowClassifier::FiveTuple t = classifier->FindFlow (i->first);
+
+        if (flag) {
+            throughputArray0.push_back(i->second.rxBytes);
+        } else if (!flag) {
+            throughputArray1.push_back(i->second.rxBytes);
+        }
+
+        std::cout << "Flow at " << Simulator::Now().GetSeconds()  << " " <<  i->first - 1 << "\n";
+        std::cout << "  Tx Bytes:   " << i->second.txBytes << "\n";
+        std::cout << "  Rx Bytes:   " << i->second.rxBytes << "\n";
+        std::cout << " Throughput: " << i->second.txBytes * 8.0 / 10.0 / 1024 / 1024  << " Mbps\n";
+
+          // in
+    }
+    Simulator::Schedule(Seconds(1.0), &CalculateThroughput, monitor, flag);
+}
+
+static void
+CalculateCumulativeThroughput() {
+    std::ofstream os0;
+    os0.open("graph/graph3speed0.txt", std::ios::app);
+
+    std::ofstream os1;
+    os1.open("graph/graph3speed1.txt", std::ios::app);
+    uint32_t prev0 = -1;
+    if (!throughputArray0.empty()) {
+        sort(throughputArray0.begin(), throughputArray0.end());
+        prev0 = throughputArray0[0];
+    } else  {
+        std::cout << "Array 0 is empty" << std::endl;
+    }
+
+
+    uint32_t prev1 = -1;
+    if (!throughputArray1.empty()) {
+        sort(throughputArray1.begin(), throughputArray1.end());
+        prev1 = throughputArray1[0];
+    } else  {
+        std::cout << "Array 1 is empty" << std::endl;
+    }
+
+
+    std::cout << "Array size 0: " << throughputArray0.size() << std::endl;
+    for (uint32_t i = 1; i < throughputArray0.size(); i++) {
+        if (throughputArray0[i] != prev0) {
+            os0 << throughputArray0[i] << " " << i << std::endl;
+            std::cout << throughputArray0[i] << " " << i << std::endl;
+            prev0 = throughputArray0[i];
+        } else if (i == throughputArray0.size() -1) {
+            os0 << throughputArray0[i] << " " << i << std::endl;
+            std::cout << throughputArray0[i] << " " << i << std::endl;
+        }
+    }
+
+    std::cout << "Array size 1: " << throughputArray1.size() << std::endl;
+    for (uint32_t i = 1; i < throughputArray1.size(); i++) {
+        if (throughputArray1[i] != prev1) {
+            os1 << throughputArray1[i] << " " << i << std::endl;
+            std::cout << throughputArray1[i] << " " << i << std::endl;
+            prev1 = throughputArray1[i];
+        } else if (i == throughputArray0.size() -1) {
+            os0 << throughputArray1[i] << " " << i << std::endl;
+            std::cout << throughputArray1[i] << " " << i << std::endl;
+        }
+    }
+    os0.close();
+    os1.close();
+
+    Simulator::Schedule(Seconds(1.0), &CalculateCumulativeThroughput);
+
+}
+
+// Plotting graph for 4, 5 and 6 since they all use the same data on different params
+static void
+PlotInstantaneousThroughput(Ptr<FlowMonitor> mon, Ptr<Node> node, int graphNum) {
+    std::string fileName;
+    fileName = "graph/graph";
+    fileName.append(std::to_string(graphNum));
+    fileName.append(schType);
+    fileName.append(".txt");
+
+    std::ofstream os;
+    os.open(fileName, std::ios::app);
+    std::map<FlowId, FlowMonitor::FlowStats> stats = mon->GetFlowStats ();
+    std::cout << "SIZE: " << stats.size() << std::endl;
+    for (auto i = stats.begin (); i != stats.end (); ++i)
+    {
+        Ptr<MobilityModel> mobility =
+            node->GetObject<MobilityModel>();
+        os << i->second.txBytes * 8.0 / 10.0 / 1024 / 1024 << " "
+            << Simulator::Now().GetSeconds()  << std::endl;
+
+    }
+
+    Simulator::Schedule(Seconds(1.0), &PlotInstantaneousThroughput, mon, node, graphNum);
+}
 
 // to write the velocity from callback
 //static void
@@ -166,7 +300,7 @@ class BiRandomVariable: public RandomVariableStream {
         }
         else if (m_flag == 1) {
             m_flag = 0;
-            return 10;
+            return speed;
         }
         return -1;
     }
@@ -210,8 +344,10 @@ int currCount = 1;
 void
 SetMCS(NetDeviceContainer* ndc)
 {
+#ifdef GRAPH_PARTB
     Ns3AiMsgInterfaceImpl<MCSFeature, MCSPredicted>* msgInterface =
         Ns3AiMsgInterface::Get()->GetInterface<MCSFeature, MCSPredicted>();
+#endif
 
     Ptr<NetDevice> netDevice;
     for(int j = 0; j < 4; ++j)
@@ -235,13 +371,14 @@ SetMCS(NetDeviceContainer* ndc)
                 // }
                 // Sending the model velocities
                 NS_LOG_UNCOND(mobility->GetPosition().x << ',' << mobility->GetPosition().y);
+
+
+#ifdef GRAPH_PARTB
                 float x = mobility->GetPosition().x;
                 float y =mobility->GetPosition().y;
                 float decX = 0, decY = 0;
                 decX = (x - (int)x) * 1000;
                 decY = (y - (int)y) * 1000;
-
-
                 if (TOT_COUNT > currCount) {
                     msgInterface->CppSendBegin();
                     msgInterface->GetCpp2PyStruct()->posX = (int)x;
@@ -266,6 +403,7 @@ SetMCS(NetDeviceContainer* ndc)
                 }
                 currCount++;
                 std::cout << "COUNTER: " << currCount << std::endl;
+#endif
             }
         }
     }
@@ -297,33 +435,33 @@ main(int argc, char* argv[])
     // LogComponentEnable("UdpClient", LOG_LEVEL_ALL);
     // LogComponentEnable("UdpServer", LOG_LEVEL_ALL);
 
-    const uint16_t numberOfUes = 10;
-    const uint16_t numberOfEnbs = 4;
     uint16_t numBearersPerUe = 1;
     Time simTime = Seconds(10); //NOTE: Not using Bi random var
     // double distance = 100.0;
     bool disableDl = false;
-    bool disableUl = true;
-    std::string schType = "ns3::FdMtFfMacScheduler";
+    bool disableUl = false;
 
     uint32_t ulResourceBlocks = 50;
     uint32_t dlResourceBlocks = 50;
 
     uint64_t runNumber = 1;
+	unsigned int rngRun = 1;
+	unsigned int seed = 50;
+    bool fullBufferFlag = true;
+    unsigned int graphNum = 1;
 
     // Command line arguments
-    //CommandLine cmd(__FILE__);
-    //cmd.AddValue("numberOfUes", "Number of UEs", numberOfUes);
-    //cmd.AddValue("numberOfEnbs", "Number of eNodeBs", numberOfEnbs);
-    //cmd.AddValue("simTime", "Total duration of the simulation", simTime);
-    //cmd.AddValue("disableDl", "Disable downlink data flows", disableDl);
-    //cmd.AddValue("disableUl", "Disable uplink data flows", disableUl);
-    //cmd.AddValue("schType", "Type of scheduler", schType);
-    //cmd.AddValue("fullBuffer", "Full Buffer or not", fullBuffer);
-    //cmd.AddValue("runNumber", "Run Number", runNumber);
-    //cmd.Parse(argc, argv);
+    CommandLine cmd(__FILE__);
+    cmd.AddValue("scheduler", "Type of schedular to use, PF, RR, MT, PSS", schType);
+    cmd.AddValue("graphNumber", "Graph to Plot: 1, 2, 3, 4, 5, 6, 7 (graph 6 b), \
+            8 (part b generation), 9 (part b prediction)", graphNum);
+	cmd.AddValue("speed", "Speed of the UE under simulator", speed);
+	cmd.AddValue("rngRun", "Seed for the random simulation", rngRun);
+	cmd.AddValue("fullBufferFlag", "Flag to enable or disable full Buffer",
+				 fullBufferFlag);
+    cmd.Parse(argc, argv);
 
-    ns3::RngSeedManager::SetSeed(50);
+    ns3::RngSeedManager::SetSeed(seed);
     ns3::RngSeedManager::SetRun(runNumber);
 
     // change some default attributes so that they are reasonable for
@@ -338,10 +476,34 @@ main(int argc, char* argv[])
     Config::SetDefault ("ns3::LteEnbNetDevice::DlBandwidth", UintegerValue (dlResourceBlocks));
     Config::SetDefault ("ns3::LteEnbNetDevice::UlBandwidth", UintegerValue (ulResourceBlocks));
 
+
+     double lambda = 1000;
+     double bandwidth = 100e6;
+     uint32_t udpPacketSize = 1500;
+     if (fullBufferFlag)
+     {
+         double bitRate = 75000000; // 75 Mbps will saturate the NR system of 20 MHz with the
+                                    // NrEesmIrT1 error model
+         bitRate /= 160;    // Divide the cell capacity among UEs
+         if (bandwidth > 20e6)
+         {
+             bitRate *= bandwidth / 20e6;
+         }
+         lambda = bitRate / static_cast<double>(udpPacketSize * 8);
+     }
+
     Ptr<LteHelper> lteHelper = CreateObject<LteHelper>();
     Ptr<PointToPointEpcHelper> epcHelper = CreateObject<PointToPointEpcHelper>();
     lteHelper->SetEpcHelper(epcHelper);
-    lteHelper->SetSchedulerType(schType);
+    if (schType == "PF") {
+        lteHelper->SetSchedulerType("ns3::PfFfMacScheduler");
+    } else if (schType == "RR") {
+        lteHelper->SetSchedulerType("ns3::RrFfMacScheduler");
+    } else if (schType == "MT") {
+        lteHelper->SetSchedulerType("ns3::TdMtFfMacScheduler");
+    } else if (schType == "PSS") {
+        lteHelper->SetSchedulerType("ns3::PssFfMacScheduler");
+    }
     lteHelper->SetHandoverAlgorithmType("ns3::A2A4RsrqHandoverAlgorithm"); // disable automatic handover
     lteHelper->SetAttribute("PathlossModel", StringValue("ns3::FriisSpectrumPropagationLossModel"));
 
@@ -372,7 +534,6 @@ main(int argc, char* argv[])
     // interface 0 is localhost, 1 is the p2p device
     remoteHostStaticRouting->AddNetworkRouteTo(Ipv4Address("7.0.0.0"), Ipv4Mask("255.0.0.0"), 1);
 
-    // FIXED
     std::vector<NodeContainer> ueNodes;
     NodeContainer enbNodes;
     enbNodes.Create(numberOfEnbs);
@@ -402,8 +563,8 @@ main(int argc, char* argv[])
     ranVar->SetAttribute("Min", DoubleValue(0));
     ranVar->SetAttribute("Max", DoubleValue(500));
 
-    //Ptr<BiRandomVariable> bi = CreateObject<BiRandomVariable>();
-    Ptr<ConstVariable> constSpeed = CreateObject<ConstVariable>();
+    Ptr<BiRandomVariable> bi = CreateObject<BiRandomVariable>();
+    // Ptr<ConstVariable> constSpeed = CreateObject<ConstVariable>();
 
     Ptr<UniformRandomVariable> urv = CreateObject<UniformRandomVariable>();
     urv->SetAttribute("Min", DoubleValue(0));
@@ -413,7 +574,7 @@ main(int argc, char* argv[])
 
     ueMobility.SetMobilityModel ("ns3::RandomWalk2dMobilityModel",
                              "Bounds", RectangleValue (Rectangle (-600, 5600, -600, 5600)), // Setting bounds
-                             "Speed", PointerValue (constSpeed),
+                             "Speed", PointerValue (bi),
                              "Mode", StringValue("Time"),
                              //"Distance", DoubleValue (100), // The distance to travel before changing direction
                              "Time", TimeValue (Seconds (0.50))); // The time to travel before changing direction
@@ -461,15 +622,6 @@ main(int argc, char* argv[])
     }
 
 
-    // Ptr<RadioEnvironmentMapHelper> remHelper = CreateObject<RadioEnvironmentMapHelper>();
-    // remHelper->SetAttribute("Channel", PointerValue(lteHelper->GetDownlinkSpectrumChannel()));
-    // remHelper->SetAttribute("OutputFile", StringValue("rem.out"));
-    // remHelper->SetAttribute("XMin", DoubleValue(-1000.0));
-    // remHelper->SetAttribute("XMax", DoubleValue(6000.0));
-    // remHelper->SetAttribute("YMin", DoubleValue(-1000.0));
-    // remHelper->SetAttribute("YMax", DoubleValue(6000.0));
-    // remHelper->SetAttribute("Z", DoubleValue(0.0));
-    // remHelper->Install();
 
     //AnimationInterface anim("anim.xml");
 
@@ -527,6 +679,7 @@ main(int argc, char* argv[])
 
                     NS_LOG_LOGIC("installing UDP UL app for UE " << u);
                     UdpClientHelper ulClientHelper(remoteHostAddr, ulPort);
+                    ulClientHelper.SetAttribute("Interval", TimeValue(Seconds(1.0 / lambda)));
                     clientApps.Add(ulClientHelper.Install(ue));
                     PacketSinkHelper ulPacketSinkHelper(
                         "ns3::UdpSocketFactory",
@@ -613,35 +766,85 @@ main(int argc, char* argv[])
     interface->SetUseVector(false);
     interface->SetHandleFinish(true);
 
-    unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
-    std::mt19937 gen(seed);
-    std::uniform_int_distribution<int> distrib(1, 10);
-
-    // for (int i = 0; i < NUM_ENV; ++i)
-    // {
-    //     msgInterface->CppSendBegin();
-    //     std::cout << "set: ";
-    //     uint32_t temp_a = distrib(gen);
-    //     uint32_t temp_b = distrib(gen);
-    //     std::cout << temp_a << "," << temp_b << ";";
-    //     msgInterface->GetCpp2PyStruct()->posX = temp_a;
-    //     msgInterface->GetCpp2PyStruct()->posY = temp_b;
-    //     std::cout << "\n";
-    //     msgInterface->CppSendEnd();
-    //
-    //     msgInterface->CppRecvBegin();
-    //     std::cout << "get: ";
-    //     std::cout << msgInterface->GetPy2CppStruct()->mcsPredicted;
-    //     std::cout << "\n";
-    //     msgInterface->CppRecvEnd();
-    // }
+    Ptr<FlowMonitor> flowMon0 = flowHelper0.Install(ueNodes[0].Get(0));
+    Ptr<FlowMonitor> flowMon1 = flowHelper0.Install(ueNodes[0].Get(1));
 
     FlowMonitorHelper flowHelper;
 
+
     Ptr<FlowMonitor> monitor = flowHelper.InstallAll();
 
-    Simulator::Schedule (Seconds (0.1), &SetMCS, ueLteDevs);
+    // Setting Up Part A graphs
+    switch(graphNum) {
+        case 1:
+        {
+            Ptr<RadioEnvironmentMapHelper> remHelper = CreateObject<RadioEnvironmentMapHelper>();
+            remHelper->SetAttribute("Channel", PointerValue(lteHelper->GetDownlinkSpectrumChannel()));
+            remHelper->SetAttribute("OutputFile", StringValue("rem.out"));
+            remHelper->SetAttribute("XMin", DoubleValue(-1000.0));
+            remHelper->SetAttribute("XMax", DoubleValue(6000.0));
+            remHelper->SetAttribute("YMin", DoubleValue(-1000.0));
+            remHelper->SetAttribute("YMax", DoubleValue(6000.0));
+            remHelper->SetAttribute("Z", DoubleValue(0.0));
+            remHelper->Install();
+            break;
+        }
+        case 2:
+        {
+#define GRAPH2
+            break;
+        }
+        case 3:
+        {
+            for (int i = 0; i < numberOfEnbs; i++) {
+                for (int j = 0; j < numberOfUes; j += 2) {
+                     flowMon0 = flowHelper0.Install(ueNodes[i].Get(j));
+                     flowMon1 = flowHelper1.Install(ueNodes[i].Get(j+1));
 
+                }
+            }
+
+            Simulator::Schedule(Seconds(0.1), &PlotGraph3, flowMon0, flowMon1, &ueNodes[0]);
+            PlotGraph3(flowMon0, flowMon1, &ueNodes[0]);
+            CalculateThroughput(flowMon0, true);
+            CalculateThroughput(flowMon1, false);
+            Simulator::Schedule(Seconds(1), &CalculateCumulativeThroughput);
+        }
+        case 4:
+        {
+            PlotInstantaneousThroughput(flowMon0, ueNodes[0].Get(0), 4);
+            break;
+        }
+        case 5:
+        {
+            PlotInstantaneousThroughput(flowMon0, ueNodes[0].Get(1), 5);
+            break;
+        }
+        case 6: // graph 6 for speed 0
+        {
+            PlotInstantaneousThroughput(flowMon0, ueNodes[1].Get(0), 6);
+            break;
+        }
+        case 7: // graph 6 for speed 10
+        {
+            PlotInstantaneousThroughput(flowMon0, ueNodes[1].Get(1), 6);
+            break;
+        }
+        case 8: // dataset generation
+        {
+            Simulator::Schedule (Seconds (0.1), &SetMCS, ueLteDevs);
+            break;
+        }
+        case 9: // machine learning prediction graph
+        {
+#define GRAPH_PARTB
+            Simulator::Schedule (Seconds (0.1), &SetMCS, ueLteDevs);
+            break;
+        }
+        default:
+            NS_LOG_UNCOND("Enter a valid Graph Number to plot");
+            break;
+    }
 
     Simulator::Stop(simTime + MilliSeconds(20));
     Simulator::Run();
@@ -653,8 +856,9 @@ main(int argc, char* argv[])
     auto stats = monitor->GetFlowStats();
     NS_LOG_UNCOND(stats.size());
 
-    float average_throughput = 0;
 
+#ifdef GRAPH2
+    float average_throughput = 0;
     counter = 0;
     for(const auto& flow : stats)
     {
@@ -664,9 +868,12 @@ main(int argc, char* argv[])
         {
             ++counter;
             average_throughput += throughput;
+            std::cout << "THROUGHPUT " << throughput << std::endl;
         }
     }
     NS_LOG_UNCOND(counter);
+    NS_LOG_UNCOND(average_throughput / 44);
+#endif
 
 // Yashwanth's Code for throughput:-
 //if (i->second.rxPackets > 0)
@@ -679,7 +886,6 @@ main(int argc, char* argv[])
 //
 //            outFile << "  Throughput: " << i->second.rxBytes * 8.0 /
 
-    NS_LOG_UNCOND(average_throughput / 44);
     // GtkConfigStore config;
     // config.ConfigureAttributes ();
 
