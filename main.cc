@@ -766,13 +766,11 @@ main(int argc, char* argv[])
     interface->SetUseVector(false);
     interface->SetHandleFinish(true);
 
+
     Ptr<FlowMonitor> flowMon0 = flowHelper0.Install(ueNodes[0].Get(0));
-    Ptr<FlowMonitor> flowMon1 = flowHelper0.Install(ueNodes[0].Get(1));
-
-    FlowMonitorHelper flowHelper;
-
-
-    Ptr<FlowMonitor> monitor = flowHelper.InstallAll();
+    Ptr<FlowMonitor> flowMon1 = flowHelper1.Install(ueNodes[0].Get(1));
+    // flowMon0 = flowHelper0.Install(remoteHost);
+    // flowMon1 = flowHelper1.Install(remoteHost);
 
     // Setting Up Part A graphs
     switch(graphNum) {
@@ -796,19 +794,24 @@ main(int argc, char* argv[])
         }
         case 3:
         {
-            for (int i = 0; i < numberOfEnbs; i++) {
-                for (int j = 0; j < numberOfUes; j += 2) {
-                     flowMon0 = flowHelper0.Install(ueNodes[i].Get(j));
-                     flowMon1 = flowHelper1.Install(ueNodes[i].Get(j+1));
+            for (uint32_t i = 0; i < numberOfEnbs; i++) {
+                for (uint32_t j = 0; j < numberOfUes; j += 2) {
+                    std::cout << "INSTALLING\n";
+                    flowMon0 = flowHelper0.Install(ueNodes[i].Get(j));
+                    flowMon1 = flowHelper1.Install(ueNodes[i].Get(j+1));
 
                 }
             }
+            // flowMon0 = flowHelper0.Install(remoteHost);
+            flowMon1 = flowHelper1.Install(remoteHost);
 
-            Simulator::Schedule(Seconds(0.1), &PlotGraph3, flowMon0, flowMon1, &ueNodes[0]);
-            PlotGraph3(flowMon0, flowMon1, &ueNodes[0]);
-            CalculateThroughput(flowMon0, true);
-            CalculateThroughput(flowMon1, false);
+            // PlotGraph3(flowMon0, flowMon1, &ueNodes[0]);
+            Simulator::Schedule(Seconds(1.0), &PlotGraph3, flowMon0, flowMon1, &ueNodes[0]);
+
+            Simulator::Schedule(Seconds(1.5), &CalculateThroughput, flowMon0, true);
+            Simulator::Schedule(Seconds(1.5), &CalculateThroughput, flowMon1, false);
             Simulator::Schedule(Seconds(1), &CalculateCumulativeThroughput);
+
         }
         case 4:
         {
@@ -846,6 +849,8 @@ main(int argc, char* argv[])
             break;
     }
 
+    FlowMonitorHelper flowHelper;
+    Ptr<FlowMonitor> monitor = flowHelper.InstallAll();
     Simulator::Stop(simTime + MilliSeconds(20));
     Simulator::Run();
 
