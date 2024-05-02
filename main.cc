@@ -29,22 +29,24 @@ std::string schType = "RR";
 float speed = 0;
 
 static void
-PlotGraph3(Ptr<FlowMonitor> mon0, Ptr<FlowMonitor> mon1, NodeContainer* cont) {
-    for (int i = 0; i < numberOfEnbs; i++) {
-        for (int j = 0; j < numberOfUes;j++) {
-            Ptr<MobilityModel> mobility =
-                cont[i].Get(j)->GetObject<MobilityModel>();
-
-            if (mobility->GetVelocity().x + mobility->GetVelocity().y == 0) {
-                std::cout << "MON1\n";
-                mon0 = flowHelper0.Install(cont[i].Get(j));
-            } else {
-                std::cout << "MON2\n";
-                mon1 = flowHelper1.Install(cont[i].Get(j));
-            }
-            std::cout << "Mobility\n\n" << mobility->GetVelocity().x << " " << mobility->GetVelocity().y << std::endl;
+PlotGraph3(ApplicationContainer& serverApps) {
+    uint64_t totalRx = 0;
+    std::cout << serverApps.GetN() << "\n\n\n";
+    for(size_t i = 0; i < serverApps.GetN(); ++i)
+    {
+        // Ptr<Node> node = serverApps.Get(i)->GetNode();
+        Ptr<PacketSink> sink = DynamicCast<PacketSink>(serverApps.Get(i));
+        // Ptr<MobilityModel> mobility =
+        //     node->GetObject<MobilityModel>();
+        // if (mobility->GetVelocity().x == 0 && mobility->GetVelocity().y == 0) {
+        if (i % 2 == 0) {
+            throughputArray0.push_back(sink->GetTotalRx());
+        } else {
+            throughputArray1.push_back(sink->GetTotalRx());
         }
+
     }
+
 }
 
 static void
@@ -79,7 +81,8 @@ CalculateCumulativeThroughput() {
     os0.open("graph/graph3speed0.txt", std::ios::app);
 
     std::ofstream os1;
-    os1.open("graph/graph3speed1.txt", std::ios::app);
+    os1.open("graph/graph3speed5.txt", std::ios::app);
+
     uint32_t prev0 = -1;
     if (!throughputArray0.empty()) {
         sort(throughputArray0.begin(), throughputArray0.end());
@@ -299,7 +302,7 @@ class BiRandomVariable: public RandomVariableStream {
             return 0;
         }
         else if (m_flag == 1) {
-            m_flag = 0;
+            m_flag = 10;
             return speed;
         }
         return -1;
@@ -436,10 +439,10 @@ main(int argc, char* argv[])
     // LogComponentEnable("UdpServer", LOG_LEVEL_ALL);
 
     uint16_t numBearersPerUe = 1;
-    Time simTime = Seconds(10); //NOTE: Not using Bi random var
+    Time simTime = Seconds(30); //NOTE: Not using Bi random var
     // double distance = 100.0;
     bool disableDl = false;
-    bool disableUl = false;
+    bool disableUl = true;
 
     uint32_t ulResourceBlocks = 50;
     uint32_t dlResourceBlocks = 50;
@@ -456,6 +459,7 @@ main(int argc, char* argv[])
     cmd.AddValue("graphNumber", "Graph to Plot: 1, 2, 3, 4, 5, 6, 7 (graph 6 b), \
             8 (part b generation), 9 (part b prediction)", graphNum);
 	cmd.AddValue("speed", "Speed of the UE under simulator", speed);
+	cmd.AddValue("seed", "Speed of the UE under simulator", seed);
 	cmd.AddValue("rngRun", "Seed for the random simulation", rngRun);
 	cmd.AddValue("fullBufferFlag", "Flag to enable or disable full Buffer",
 				 fullBufferFlag);
@@ -638,6 +642,9 @@ main(int argc, char* argv[])
     startTimeSeconds->SetAttribute("Min", DoubleValue(0.05));
     startTimeSeconds->SetAttribute("Max", DoubleValue(0.06));
 
+    ApplicationContainer clientApps;
+    ApplicationContainer serverApps;
+
     for (int i = 0; i < numberOfEnbs; i++) {
         for (uint32_t u = 0; u < numberOfUes; ++u)
         {
@@ -649,8 +656,6 @@ main(int argc, char* argv[])
 
             for (uint32_t b = 0; b < numBearersPerUe; ++b)
             {
-                ApplicationContainer clientApps;
-                ApplicationContainer serverApps;
                 Ptr<EpcTft> tft = Create<EpcTft>();
 
                 if (!disableDl)
@@ -679,7 +684,6 @@ main(int argc, char* argv[])
 
                     NS_LOG_LOGIC("installing UDP UL app for UE " << u);
                     UdpClientHelper ulClientHelper(remoteHostAddr, ulPort);
-                    ulClientHelper.SetAttribute("Interval", TimeValue(Seconds(1.0 / lambda)));
                     clientApps.Add(ulClientHelper.Install(ue));
                     PacketSinkHelper ulPacketSinkHelper(
                         "ns3::UdpSocketFactory",
@@ -697,14 +701,13 @@ main(int argc, char* argv[])
                 // FIXED
                 lteHelper->ActivateDedicatedEpsBearer(ueLteDevs[i].Get(u), bearer, tft);
 
-                Time startTime = Seconds(startTimeSeconds->GetValue());
-                serverApps.Start(startTime);
-                clientApps.Start(startTime);
-                clientApps.Stop(simTime);
-
             } // end for b
         }
     }
+    Time startTime = Seconds(startTimeSeconds->GetValue());
+    serverApps.Start(startTime);
+    clientApps.Start(startTime);
+    clientApps.Stop(simTime);
 
     // Add X2 interface
     lteHelper->AddX2Interface(enbNodes);
@@ -767,8 +770,10 @@ main(int argc, char* argv[])
     interface->SetHandleFinish(true);
 
 
-    Ptr<FlowMonitor> flowMon0 = flowHelper0.Install(ueNodes[0].Get(0));
-    Ptr<FlowMonitor> flowMon1 = flowHelper1.Install(ueNodes[0].Get(1));
+    FlowMonitorHelper flowHelper;
+    Ptr<FlowMonitor> monitor = flowHelper.InstallAll();
+    Ptr<FlowMonitor> flowMon0;
+    Ptr<FlowMonitor> flowMon1;
     // flowMon0 = flowHelper0.Install(remoteHost);
     // flowMon1 = flowHelper1.Install(remoteHost);
 
@@ -794,42 +799,44 @@ main(int argc, char* argv[])
         }
         case 3:
         {
-            for (uint32_t i = 0; i < numberOfEnbs; i++) {
-                for (uint32_t j = 0; j < numberOfUes; j += 2) {
-                    std::cout << "INSTALLING\n";
-                    flowMon0 = flowHelper0.Install(ueNodes[i].Get(j));
-                    flowMon1 = flowHelper1.Install(ueNodes[i].Get(j+1));
-
-                }
-            }
-            // flowMon0 = flowHelper0.Install(remoteHost);
-            flowMon1 = flowHelper1.Install(remoteHost);
-
             // PlotGraph3(flowMon0, flowMon1, &ueNodes[0]);
-            Simulator::Schedule(Seconds(1.0), &PlotGraph3, flowMon0, flowMon1, &ueNodes[0]);
+            // Ptr<ApplicationContainer> apps = CreateObject<ApplicationContainer>(serverApps);
+            Simulator::Schedule(Seconds(3), &PlotGraph3, std::ref(serverApps));
+            Simulator::Schedule(Seconds(3), &CalculateCumulativeThroughput);
 
-            Simulator::Schedule(Seconds(1.5), &CalculateThroughput, flowMon0, true);
-            Simulator::Schedule(Seconds(1.5), &CalculateThroughput, flowMon1, false);
-            Simulator::Schedule(Seconds(1), &CalculateCumulativeThroughput);
+            // Simulator::Schedule(Seconds(1.5), &CalculateThroughput, flowMon0, true);
+            // Simulator::Schedule(Seconds(1.5), &CalculateThroughput, flowMon1, false);
 
         }
         case 4:
         {
-            PlotInstantaneousThroughput(flowMon0, ueNodes[0].Get(0), 4);
+            flowMon0 = flowHelper0.Install(ueNodes[0].Get(0));
+            flowMon1 = flowHelper1.Install(ueNodes[0].Get(1));
+            flowMon1 = flowHelper1.Install(remoteHost);
+            PlotInstantaneousThroughput(monitor, ueNodes[0].Get(0), 4);
             break;
         }
         case 5:
         {
+            flowMon0 = flowHelper0.Install(ueNodes[0].Get(1));
+            flowMon1 = flowHelper1.Install(ueNodes[0].Get(0));
+            flowMon1 = flowHelper1.Install(remoteHost);
             PlotInstantaneousThroughput(flowMon0, ueNodes[0].Get(1), 5);
             break;
         }
         case 6: // graph 6 for speed 0
         {
+            flowMon0 = flowHelper0.Install(ueNodes[0].Get(0));
+            flowMon1 = flowHelper1.Install(ueNodes[0].Get(1));
+            flowMon1 = flowHelper1.Install(remoteHost);
             PlotInstantaneousThroughput(flowMon0, ueNodes[1].Get(0), 6);
             break;
         }
         case 7: // graph 6 for speed 10
         {
+            flowMon0 = flowHelper0.Install(ueNodes[0].Get(1));
+            flowMon1 = flowHelper1.Install(ueNodes[0].Get(0));
+            flowMon1 = flowHelper1.Install(remoteHost);
             PlotInstantaneousThroughput(flowMon0, ueNodes[1].Get(1), 6);
             break;
         }
@@ -849,8 +856,6 @@ main(int argc, char* argv[])
             break;
     }
 
-    FlowMonitorHelper flowHelper;
-    Ptr<FlowMonitor> monitor = flowHelper.InstallAll();
     Simulator::Stop(simTime + MilliSeconds(20));
     Simulator::Run();
 
