@@ -26,11 +26,11 @@ FlowMonitorHelper flowHelper1;
 vector<uint32_t> throughputArray0;
 vector<uint32_t> throughputArray1;
 std::string schType = "RR";
-float speed = 0;
+float speed = 10;
+uint64_t previousRx = 0;
 
 static void
 PlotGraph3(ApplicationContainer& serverApps) {
-    uint64_t totalRx = 0;
     std::cout << serverApps.GetN() << "\n\n\n";
     for(size_t i = 0; i < serverApps.GetN(); ++i)
     {
@@ -46,6 +46,7 @@ PlotGraph3(ApplicationContainer& serverApps) {
         }
 
     }
+    Simulator::Schedule(Seconds(1), &PlotGraph3, serverApps);
 
 }
 
@@ -133,7 +134,7 @@ CalculateCumulativeThroughput() {
 
 // Plotting graph for 4, 5 and 6 since they all use the same data on different params
 static void
-PlotInstantaneousThroughput(Ptr<FlowMonitor> mon, Ptr<Node> node, int graphNum) {
+PlotInstantaneousThroughput(ApplicationContainer& apps, uint32_t graphNum) {
     std::string fileName;
     fileName = "graph/graph";
     fileName.append(std::to_string(graphNum));
@@ -142,18 +143,29 @@ PlotInstantaneousThroughput(Ptr<FlowMonitor> mon, Ptr<Node> node, int graphNum) 
 
     std::ofstream os;
     os.open(fileName, std::ios::app);
-    std::map<FlowId, FlowMonitor::FlowStats> stats = mon->GetFlowStats ();
-    std::cout << "SIZE: " << stats.size() << std::endl;
-    for (auto i = stats.begin (); i != stats.end (); ++i)
-    {
-        Ptr<MobilityModel> mobility =
-            node->GetObject<MobilityModel>();
-        os << i->second.txBytes * 8.0 / 10.0 / 1024 / 1024 << " "
-            << Simulator::Now().GetSeconds()  << std::endl;
-
+    Ptr<PacketSink> sink;
+    Ptr<Node> node;
+    if (graphNum == 4 || graphNum == 6) {
+        sink = DynamicCast<PacketSink>(apps.Get(25));
+        node = apps.Get(0)->GetNode();
+    } else if (graphNum == 5 || graphNum == 7) {
+        sink = DynamicCast<PacketSink>(apps.Get(26));
+        node = apps.Get(1)->GetNode();
     }
 
-    Simulator::Schedule(Seconds(1.0), &PlotInstantaneousThroughput, mon, node, graphNum);
+    // for (int i = 0; i < apps.GetN(); i++) {
+        // sink = DynamicCast<PacketSink>(apps.Get(i));
+
+    uint64_t currRx = sink->GetTotalRx();
+    Ptr<MobilityModel> mob = node->GetObject<MobilityModel>();
+    NS_LOG_UNCOND(mob->GetVelocity().x << " " << mob->GetVelocity().y);
+    os << (currRx - previousRx) * 8.0 / 1024 / 1024 << " "
+        << Simulator::Now().GetSeconds()  << std::endl;
+    previousRx = currRx;
+    // }
+
+    Simulator::Schedule(Seconds(1.0), &PlotInstantaneousThroughput, std::ref(apps), graphNum);
+    os.close();
 }
 
 // to write the velocity from callback
@@ -302,7 +314,7 @@ class BiRandomVariable: public RandomVariableStream {
             return 0;
         }
         else if (m_flag == 1) {
-            m_flag = 10;
+            m_flag = 0;
             return speed;
         }
         return -1;
@@ -471,8 +483,8 @@ main(int argc, char* argv[])
     // change some default attributes so that they are reasonable for
     // this scenario, but do this before processing command line
     // arguments, so that the user is allowed to override these settings
-    Config::SetDefault("ns3::UdpClient::Interval", TimeValue(MilliSeconds(10)));
-    //Config::SetDefault("ns3::UdpClient::MaxPackets", UintegerValue(4000000000));
+    Config::SetDefault("ns3::UdpClient::Interval", TimeValue(MilliSeconds(200)));
+    Config::SetDefault("ns3::UdpClient::MaxPackets", UintegerValue(4000000000));
     Config::SetDefault("ns3::UdpClient::PacketSize", UintegerValue(1500));
     Config::SetDefault("ns3::LteHelper::UseIdealRrc", BooleanValue(false));
 
@@ -497,19 +509,20 @@ main(int argc, char* argv[])
      }
 
     Ptr<LteHelper> lteHelper = CreateObject<LteHelper>();
-    Ptr<PointToPointEpcHelper> epcHelper = CreateObject<PointToPointEpcHelper>();
-    lteHelper->SetEpcHelper(epcHelper);
     if (schType == "PF") {
         lteHelper->SetSchedulerType("ns3::PfFfMacScheduler");
     } else if (schType == "RR") {
         lteHelper->SetSchedulerType("ns3::RrFfMacScheduler");
     } else if (schType == "MT") {
-        lteHelper->SetSchedulerType("ns3::TdMtFfMacScheduler");
+        lteHelper->SetSchedulerType("ns3::FdMtFfMacScheduler");
     } else if (schType == "PSS") {
         lteHelper->SetSchedulerType("ns3::PssFfMacScheduler");
     }
     lteHelper->SetHandoverAlgorithmType("ns3::A2A4RsrqHandoverAlgorithm"); // disable automatic handover
+    Ptr<PointToPointEpcHelper> epcHelper = CreateObject<PointToPointEpcHelper>();
+    lteHelper->SetEpcHelper(epcHelper);
     lteHelper->SetAttribute("PathlossModel", StringValue("ns3::FriisSpectrumPropagationLossModel"));
+    NS_LOG_UNCOND(lteHelper->GetSchedulerType());
 
     Ptr<Node> pgw = epcHelper->GetPgwNode();
 
@@ -522,7 +535,7 @@ main(int argc, char* argv[])
 
     // Create the Internet
     PointToPointHelper p2ph;
-    p2ph.SetDeviceAttribute("DataRate", DataRateValue(DataRate("100Gb/s")));
+    p2ph.SetDeviceAttribute("DataRate", DataRateValue(DataRate("12Mb/s")));
     p2ph.SetDeviceAttribute("Mtu", UintegerValue(1500));
     p2ph.SetChannelAttribute("Delay", TimeValue(Seconds(0.0001)));
     NetDeviceContainer internetDevices = p2ph.Install(pgw, remoteHost);
@@ -565,7 +578,7 @@ main(int argc, char* argv[])
     MobilityHelper ueMobility;
     Ptr<UniformRandomVariable> ranVar = CreateObject<UniformRandomVariable>();
     ranVar->SetAttribute("Min", DoubleValue(0));
-    ranVar->SetAttribute("Max", DoubleValue(500));
+    ranVar->SetAttribute("Max", DoubleValue(1000));
 
     Ptr<BiRandomVariable> bi = CreateObject<BiRandomVariable>();
     // Ptr<ConstVariable> constSpeed = CreateObject<ConstVariable>();
@@ -577,11 +590,11 @@ main(int argc, char* argv[])
     //ueMobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
 
     ueMobility.SetMobilityModel ("ns3::RandomWalk2dMobilityModel",
-                             "Bounds", RectangleValue (Rectangle (-600, 5600, -600, 5600)), // Setting bounds
-                             "Speed", PointerValue (bi),
-                             "Mode", StringValue("Time"),
+                             "Bounds", RectangleValue (Rectangle (-1100, 6100, -1100, 6100)), // Setting bounds
+                             "Speed", PointerValue (bi));
+                             // "Mode", StringValue("Time"),
                              //"Distance", DoubleValue (100), // The distance to travel before changing direction
-                             "Time", TimeValue (Seconds (0.50))); // The time to travel before changing direction
+                             // "Time", TimeValue (Seconds (0.50))); // The time to travel before changing direction
 
 
     // FIXED
@@ -770,12 +783,11 @@ main(int argc, char* argv[])
     interface->SetHandleFinish(true);
 
 
-    FlowMonitorHelper flowHelper;
-    Ptr<FlowMonitor> monitor = flowHelper.InstallAll();
     Ptr<FlowMonitor> flowMon0;
     Ptr<FlowMonitor> flowMon1;
+    flowMon0 = flowHelper0.Install(ueNodes[0].Get(0));
     // flowMon0 = flowHelper0.Install(remoteHost);
-    // flowMon1 = flowHelper1.Install(remoteHost);
+    flowMon1 = flowHelper1.Install(remoteHost);
 
     // Setting Up Part A graphs
     switch(graphNum) {
@@ -801,45 +813,21 @@ main(int argc, char* argv[])
         {
             // PlotGraph3(flowMon0, flowMon1, &ueNodes[0]);
             // Ptr<ApplicationContainer> apps = CreateObject<ApplicationContainer>(serverApps);
-            Simulator::Schedule(Seconds(3), &PlotGraph3, std::ref(serverApps));
-            Simulator::Schedule(Seconds(3), &CalculateCumulativeThroughput);
+            Simulator::Schedule(Seconds(1), &PlotGraph3, std::ref(serverApps));
+            Simulator::Schedule(simTime - Seconds(0.3), &CalculateCumulativeThroughput);
 
             // Simulator::Schedule(Seconds(1.5), &CalculateThroughput, flowMon0, true);
             // Simulator::Schedule(Seconds(1.5), &CalculateThroughput, flowMon1, false);
 
         }
         case 4:
-        {
-            flowMon0 = flowHelper0.Install(ueNodes[0].Get(0));
-            flowMon1 = flowHelper1.Install(ueNodes[0].Get(1));
-            flowMon1 = flowHelper1.Install(remoteHost);
-            PlotInstantaneousThroughput(monitor, ueNodes[0].Get(0), 4);
-            break;
-        }
         case 5:
+        case 6:
+        case 7:
         {
-            flowMon0 = flowHelper0.Install(ueNodes[0].Get(1));
-            flowMon1 = flowHelper1.Install(ueNodes[0].Get(0));
-            flowMon1 = flowHelper1.Install(remoteHost);
-            PlotInstantaneousThroughput(flowMon0, ueNodes[0].Get(1), 5);
+            PlotInstantaneousThroughput(std::ref(serverApps), graphNum);
             break;
-        }
-        case 6: // graph 6 for speed 0
-        {
-            flowMon0 = flowHelper0.Install(ueNodes[0].Get(0));
-            flowMon1 = flowHelper1.Install(ueNodes[0].Get(1));
-            flowMon1 = flowHelper1.Install(remoteHost);
-            PlotInstantaneousThroughput(flowMon0, ueNodes[1].Get(0), 6);
-            break;
-        }
-        case 7: // graph 6 for speed 10
-        {
-            flowMon0 = flowHelper0.Install(ueNodes[0].Get(1));
-            flowMon1 = flowHelper1.Install(ueNodes[0].Get(0));
-            flowMon1 = flowHelper1.Install(remoteHost);
-            PlotInstantaneousThroughput(flowMon0, ueNodes[1].Get(1), 6);
-            break;
-        }
+            }
         case 8: // dataset generation
         {
             Simulator::Schedule (Seconds (0.1), &SetMCS, ueLteDevs);
@@ -855,8 +843,10 @@ main(int argc, char* argv[])
             NS_LOG_UNCOND("Enter a valid Graph Number to plot");
             break;
     }
+    FlowMonitorHelper flowHelper;
+    Ptr<FlowMonitor> monitor = flowHelper.InstallAll();
 
-    Simulator::Stop(simTime + MilliSeconds(20));
+    Simulator::Stop(simTime + MilliSeconds(2));
     Simulator::Run();
 
     flowHelper.SerializeToXmlFile ("scratch.flowmonitor", true, true);
@@ -865,6 +855,8 @@ main(int argc, char* argv[])
     monitor->CheckForLostPackets();
     auto stats = monitor->GetFlowStats();
     NS_LOG_UNCOND(stats.size());
+    Ptr<PacketSink> sink = DynamicCast<PacketSink>(serverApps.Get(1));
+    NS_LOG_UNCOND(sink->GetTotalRx());
 
 
 #ifdef GRAPH2
