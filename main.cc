@@ -204,12 +204,13 @@ void GetMCS() {
     std::cout << ret << std::endl;
     Simulator::Schedule (Seconds (0.1), &GetMCS);
 };
-const int TOT_COUNT = 100;
+const int TOT_COUNT = 160;
 int currCount = 1;
 
 void
 SetMCS(NetDeviceContainer* ndc)
 {
+    NS_LOG_UNCOND("setmcs");
     Ns3AiMsgInterfaceImpl<MCSFeature, MCSPredicted>* msgInterface =
         Ns3AiMsgInterface::Get()->GetInterface<MCSFeature, MCSPredicted>();
 
@@ -348,7 +349,7 @@ main(int argc, char* argv[])
     const uint16_t numberOfUes = 10;
     const uint16_t numberOfEnbs = 4;
     uint16_t numBearersPerUe = 1;
-    Time simTime = Seconds(50); //NOTE: Not using Bi random var
+    Time simTime = Seconds(51); //NOTE: Not using Bi random var
     // double distance = 100.0;
     bool disableDl = false;
     bool disableUl = true;
@@ -688,8 +689,7 @@ main(int argc, char* argv[])
 
     Ptr<FlowMonitor> monitor = flowHelper.InstallAll();
 
-    Simulator::Schedule (Seconds (0.1), &SetMCS, ueLteDevs);
-
+    Simulator::Schedule (Seconds (1), &SetMCS, ueLteDevs);
 
     Simulator::Stop(simTime + MilliSeconds(20));
     Simulator::Run();

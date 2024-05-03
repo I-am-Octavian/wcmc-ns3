@@ -18,10 +18,11 @@ sequence_length = 100
 #model.add(layers.Dense(9, activation='softmax'))
 #model.compile(optimizer='adam', loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True), metrics=['accuracy'])
 checkpoint_path = "ns3/checkpoint"
-model = keras.models.load_model('firstModel.Keras')
+model = keras.models.load_model('secondModel.Keras')
 
 
-lookup = np.array([28, 18, 22, 26, 14, 20, 16, 24,  0])
+#lookup = np.array([28, 18, 22, 26, 14, 20, 16, 24,  0]) # For firstModel.Keras
+lookup = np.array([28, 22, 26, 16, 20, 24, 18])
 
 X_max = np.array([5726.29, 5916.92])
 X_min = np.array([-641.929, -810.928])
@@ -32,7 +33,7 @@ exp = Experiment("assignment", "./../",
                  interface, handleFinish=True)
 
 msgInterface = exp.run(show_output=True)
-totalCount = 100
+totalCount = 160
 currCount = 1
 try:
     while True:
@@ -78,7 +79,7 @@ try:
 
             dummy = []
             counter = 0
-            for i in range(0, 99):
+            for i in range(0, totalCount-1):
                 dummy.append(X_scaled[0][i])
             dummy.append(np.array([x,y]))
             X_scaled = np.array([dummy])
@@ -91,7 +92,7 @@ try:
 
             dummy = []
             counter = 0
-            for i in range(1, 100):
+            for i in range(1, totalCount):
                 dummy.append(X_scaled[0][i])
             X_scaled = np.array([dummy])
 
