@@ -310,7 +310,7 @@ SetMCS(NetDeviceContainer* ndc)
                         msgInterface->CppRecvBegin();
                         uint32_t ret = msgInterface->GetPy2CppStruct()->mcsPredicted;
                         msgInterface->CppRecvEnd();
-                        NS_LOG_UNCOND("pred " << x << ' ' << y << ' ' << (int)mcs << ' ' << ret);
+                        std::clog << "pred " << x << ' ' << y << ' ' << (int)mcs << ' ' << ret << '\n';
                     }
                     currCount++;
                 }
@@ -349,7 +349,7 @@ main(int argc, char* argv[])
     const uint16_t numberOfUes = 10;
     const uint16_t numberOfEnbs = 4;
     uint16_t numBearersPerUe = 1;
-    Time simTime = Seconds(51); //NOTE: Not using Bi random var
+    Time simTime = Seconds(52); //NOTE: Not using Bi random var
     // double distance = 100.0;
     bool disableDl = false;
     bool disableUl = true;
@@ -378,8 +378,8 @@ main(int argc, char* argv[])
     // change some default attributes so that they are reasonable for
     // this scenario, but do this before processing command line
     // arguments, so that the user is allowed to override these settings
-    Config::SetDefault("ns3::UdpClient::Interval", TimeValue(MilliSeconds(8)));
-    //Config::SetDefault("ns3::UdpClient::MaxPackets", UintegerValue(4000000000));
+    Config::SetDefault("ns3::UdpClient::Interval", TimeValue(MilliSeconds(4)));
+    Config::SetDefault("ns3::UdpClient::MaxPackets", UintegerValue(4000000000));
     Config::SetDefault("ns3::UdpClient::PacketSize", UintegerValue(1500));
     Config::SetDefault("ns3::LteHelper::UseIdealRrc", BooleanValue(false));
 
@@ -449,10 +449,10 @@ main(int argc, char* argv[])
     MobilityHelper ueMobility;
     Ptr<UniformRandomVariable> ranVar = CreateObject<UniformRandomVariable>();
     ranVar->SetAttribute("Min", DoubleValue(0));
-    ranVar->SetAttribute("Max", DoubleValue(500));
+    ranVar->SetAttribute("Max", DoubleValue(1800));
 
-    //Ptr<BiRandomVariable> bi = CreateObject<BiRandomVariable>();
-    Ptr<ConstVariable> constSpeed = CreateObject<ConstVariable>();
+    Ptr<BiRandomVariable> bi = CreateObject<BiRandomVariable>();
+    //Ptr<ConstVariable> constSpeed = CreateObject<ConstVariable>();
 
     Ptr<UniformRandomVariable> urv = CreateObject<UniformRandomVariable>();
     urv->SetAttribute("Min", DoubleValue(0));
@@ -461,8 +461,8 @@ main(int argc, char* argv[])
     //ueMobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
 
     ueMobility.SetMobilityModel ("ns3::RandomWalk2dMobilityModel",
-                             "Bounds", RectangleValue (Rectangle (-600, 5600, -600, 5600)), // Setting bounds
-                             "Speed", PointerValue (constSpeed),
+                             "Bounds", RectangleValue (Rectangle (-2000, 7000, -2000, 7000)), // Setting bounds
+                             "Speed", PointerValue (bi),
                              "Mode", StringValue("Time"),
                              //"Distance", DoubleValue (100), // The distance to travel before changing direction
                              "Time", TimeValue (Seconds (0.50))); // The time to travel before changing direction
@@ -689,7 +689,7 @@ main(int argc, char* argv[])
 
     Ptr<FlowMonitor> monitor = flowHelper.InstallAll();
 
-    Simulator::Schedule (Seconds (1), &SetMCS, ueLteDevs);
+    Simulator::Schedule (Seconds (2), &SetMCS, ueLteDevs);
 
     Simulator::Stop(simTime + MilliSeconds(20));
     Simulator::Run();

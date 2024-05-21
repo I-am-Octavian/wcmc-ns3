@@ -9,7 +9,7 @@ import numpy as np
 
 CUDA_VISIBLE_DEVICES=""
 
-sequence_length = 100
+sequence_length = 160
 #model = keras.Sequential()
 #model.add(layers.SimpleRNN(40, kernel_regularizer=keras.regularizers.l1_l2(l1=2e-5, l2=2e-4),
 #                    recurrent_regularizer=keras.regularizers.l1_l2(l1=1e-5, l2=2e-4),
@@ -18,14 +18,21 @@ sequence_length = 100
 #model.add(layers.Dense(9, activation='softmax'))
 #model.compile(optimizer='adam', loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True), metrics=['accuracy'])
 checkpoint_path = "ns3/checkpoint"
-model = keras.models.load_model('secondModel.Keras')
+model = keras.models.load_model('fourthModel2.Keras')
 
 
 #lookup = np.array([28, 18, 22, 26, 14, 20, 16, 24,  0]) # For firstModel.Keras
-lookup = np.array([28, 22, 26, 16, 20, 24, 18])
+#lookup = np.array([28, 22, 26, 16, 20, 24, 18]) # For secondModel.Keras
+#lookup = np.array([28, 22, 20, 18, 24, 16, 26, 10, 12,  8, 14]) # For thridModel.Keras
+lookup = np.array([28, 24, 22, 20, 18, 12, 14, 10, 16, 26,  8,  6,  4])
+lookup.sort()
 
-X_max = np.array([5726.29, 5916.92])
-X_min = np.array([-641.929, -810.928])
+#X_max = np.array([5726.29, 5916.92])
+#X_min = np.array([-641.929, -810.928])
+#X_max = np.array([6816.59, 6285.32])
+#X_min = np.array([-1366.89, -1697.83])
+X_max = np.array([7000, 7000])
+X_min = np.array([-2000, -2000])
 
 X_scaled = []
 
